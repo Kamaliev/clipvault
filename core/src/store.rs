@@ -11,7 +11,7 @@ use crate::preview;
 
 type Clock = Box<dyn Fn() -> i64 + Send + Sync>;
 
-const CHECK_PLAINTEXT: &[u8] = b"pb-window key check v1";
+const CHECK_PLAINTEXT: &[u8] = b"clipvault key check v1";
 
 #[derive(uniffi::Object)]
 pub struct Store {

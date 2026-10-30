@@ -255,6 +255,22 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1c133bc6a41be0d194c306b5506d15e6feeea7b1d6604bd3f8310dfb2ca96486"
 
 [[package]]
+name = "clipvault-core"
+version = "0.1.0"
+dependencies = [
+ "blake3",
+ "chacha20poly1305",
+ "getrandom",
+ "hkdf",
+ "rusqlite",
+ "sha2",
+ "tempfile",
+ "thiserror",
+ "uniffi",
+ "zeroize",
+]
+
+[[package]]
 name = "cmov"
 version = "0.5.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -531,22 +547,6 @@ name = "once_cell"
 version = "1.21.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9f7c3e4beb33f85d45ae3e3a1792185706c8e16d043238c593331cc7cd313b50"
-
-[[package]]
-name = "pbcore"
-version = "0.1.0"
-dependencies = [
- "blake3",
- "chacha20poly1305",
- "getrandom",
- "hkdf",
- "rusqlite",
- "sha2",
- "tempfile",
- "thiserror",
- "uniffi",
- "zeroize",
-]
 
 [[package]]
 name = "percent-encoding"

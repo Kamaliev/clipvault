@@ -1,0 +1,5 @@
+module clipvault_coreFFI {
+    header "clipvault_coreFFI.h"
+    link "clipvault_core"
+    export *
+}

@@ -59,7 +59,7 @@ final class GlobalHotKey {
     @discardableResult
     func register(_ spec: HotKeySpec) -> Bool {
         unregister()
-        let id = EventHotKeyID(signature: OSType(0x5042_5731), id: 1) // 'PBW1'
+        let id = EventHotKeyID(signature: OSType(0x434C_5056), id: 1) // 'CLPV'
         let status = RegisterEventHotKey(spec.keyCode, spec.carbonModifiers, id, GetApplicationEventTarget(), 0, &hotKeyRef)
         return status == noErr
     }

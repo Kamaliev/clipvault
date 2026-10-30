@@ -9,14 +9,14 @@ let coreLibDir = URL(fileURLWithPath: #filePath)
     .appendingPathComponent("build/core").path
 
 let package = Package(
-    name: "PbWindow",
+    name: "Clipvault",
     platforms: [.macOS(.v14)],
     targets: [
-        .systemLibrary(name: "pbcoreFFI", path: "Sources/PbCoreFFI"),
+        .systemLibrary(name: "clipvault_coreFFI", path: "Sources/CoreFFI"),
         .executableTarget(
-            name: "PbWindow",
-            dependencies: ["pbcoreFFI"],
-            path: "Sources/PbWindow",
+            name: "Clipvault",
+            dependencies: ["clipvault_coreFFI"],
+            path: "Sources/Clipvault",
             linkerSettings: [
                 .unsafeFlags(["-L", coreLibDir]),
                 .linkedFramework("Carbon"),

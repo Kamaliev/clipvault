@@ -1,7 +1,7 @@
 use std::sync::atomic::{AtomicI64, Ordering};
 use std::sync::Arc;
 
-use pbcore::{delete_store_files, ClipKind, ClipRep, CoreError, NewClip, Store};
+use clipvault_core::{delete_store_files, ClipKind, ClipRep, CoreError, NewClip, Store};
 
 const KEY: [u8; 32] = [7u8; 32];
 const DAY: u64 = 24 * 3600;

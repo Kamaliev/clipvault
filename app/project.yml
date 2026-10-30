@@ -1,28 +1,28 @@
 # Optional Xcode project (xcodegen). The default build uses SwiftPM: see ../scripts/bundle-app.sh
-name: PbWindow
+name: Clipvault
 options:
   bundleIdPrefix: com.kamaliev
   deploymentTarget:
     macOS: "14.0"
 targets:
-  PbWindow:
+  Clipvault:
     type: application
     platform: macOS
     sources:
-      - Sources/PbWindow
+      - Sources/Clipvault
     preBuildScripts:
       - name: Build Rust core
         script: "\"${PROJECT_DIR}/../scripts/build-core.sh\""
         basedOnDependencyAnalysis: false
     settings:
       base:
-        PRODUCT_NAME: PbWindow
-        PRODUCT_BUNDLE_IDENTIFIER: com.kamaliev.pb-window
+        PRODUCT_NAME: Clipvault
+        PRODUCT_BUNDLE_IDENTIFIER: com.kamaliev.clipvault
         INFOPLIST_FILE: Resources/Info.plist
         SWIFT_VERSION: "5.0"
-        SWIFT_INCLUDE_PATHS: $(PROJECT_DIR)/Sources/PbCoreFFI
+        SWIFT_INCLUDE_PATHS: $(PROJECT_DIR)/Sources/CoreFFI
         LIBRARY_SEARCH_PATHS: $(PROJECT_DIR)/../build/core
-        OTHER_LDFLAGS: ["-lpbcore"]
+        OTHER_LDFLAGS: ["-lclipvault_core"]
         ENABLE_HARDENED_RUNTIME: YES
         CODE_SIGN_IDENTITY: "-"
     dependencies:
