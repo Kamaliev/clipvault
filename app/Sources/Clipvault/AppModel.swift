@@ -59,11 +59,11 @@ final class AppModel: ObservableObject {
         DistributedNotificationCenter.default().addObserver(
             forName: .init("com.kamaliev.clipvault.toggle"), object: nil, queue: .main
         ) { [weak self] _ in
-            Task { @MainActor in self?.togglePopup() }
+            Task { @MainActor [weak self] in self?.togglePopup() }
         }
 
         let timer = Timer(timeInterval: 300, repeats: true) { [weak self] _ in
-            Task { @MainActor in self?.purge() }
+            Task { @MainActor [weak self] in self?.purge() }
         }
         timer.tolerance = 60
         RunLoop.main.add(timer, forMode: .common)
