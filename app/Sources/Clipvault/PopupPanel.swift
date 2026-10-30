@@ -24,7 +24,8 @@ final class PopupPanel: NSPanel {
         minSize = NSSize(width: 380, height: 260)
         isOpaque = false
         backgroundColor = .clear
-        hasShadow = true
+        // The system shadow of a borderless window draws a dark hairline around the glass.
+        hasShadow = false
     }
 
     override var canBecomeKey: Bool { true }

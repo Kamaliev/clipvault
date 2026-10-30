@@ -20,7 +20,7 @@ the project uses [Semantic Versioning](https://semver.org/).
 
 - The history popup is now truly translucent: Liquid Glass on macOS 26, behind-window vibrancy on macOS 14–15.
 - Neutral row highlight and a light scrim over the glass for readability.
-- Borderless popup with cleanly clipped rounded corners (no dark edge pixels).
+- Borderless popup with cleanly clipped rounded corners and no dark outline (no dark edge pixels, no system shadow hairline).
 - Clear History keeps pinned records.
 - Database schema version 2 (adds the pinned flag); migrated automatically.
 - CI and release builds run on `macos-26` (macOS 26 SDK).
