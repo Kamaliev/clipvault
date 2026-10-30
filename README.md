@@ -1,175 +1,151 @@
-<div align="center">
+# Clipvault
 
-# 🔐 Clipvault
+Encrypted clipboard history for macOS with a fixed 24-hour retention window.
 
-**Зашифрованная история буфера обмена за последние 24 часа для macOS**
+Press <kbd>⇧⌘V</kbd>, search, press <kbd>⏎</kbd>. Every record is encrypted at rest with a key
+held in the macOS Keychain and is deleted after 24 hours.
 
-Нажмите <kbd>⇧</kbd><kbd>⌘</kbd><kbd>V</kbd>, найдите нужный фрагмент и вставьте его. Всё хранится локально в зашифрованном виде и удаляется через сутки.
+[![CI](https://github.com/Kamaliev/clipvault/actions/workflows/ci.yml/badge.svg)](https://github.com/Kamaliev/clipvault/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/Kamaliev/clipvault)](https://github.com/Kamaliev/clipvault/releases/latest)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-![macOS 14+](https://img.shields.io/badge/macOS-14%2B-black?logo=apple)
-![Rust](https://img.shields.io/badge/core-Rust-orange?logo=rust)
-![SwiftUI](https://img.shields.io/badge/UI-SwiftUI-blue?logo=swift)
-![License: MIT](https://img.shields.io/badge/license-MIT-green)
+<img src="docs/screenshot.png" width="560" alt="Clipvault history window">
 
-<img src="docs/screenshot.png" width="560" alt="Окно истории Clipvault">
+## Installation
 
-</div>
-
----
-
-## Возможности
-
-- ⌨️ **Глобальная горячая клавиша**: <kbd>⇧⌘V</kbd> по умолчанию, меняется в настройках.
-- 📋 **Все основные форматы**: текст, RTF, HTML, изображения (с миниатюрами) и файлы. При вставке восстанавливаются все представления, поэтому форматирование сохраняется.
-- ⚡ **Автовставка**: выбранная запись вставляется прямо в приложение, где вы работали.
-- 🔎 **Мгновенный поиск** по тексту, путям файлов и названию приложения-источника.
-- 🔐 **Шифрование каждой записи**: XChaCha20-Poly1305, ключ хранится в macOS Keychain.
-- ⏳ **Хранение 24 часа**: просроченные записи скрываются сразу и удаляются из базы с затиранием.
-- 🙈 **Не сохраняет пароли**: игнорирует содержимое, помеченное менеджерами паролей (1Password, KeePassXC и др.) как скрытое или временное.
-- 🪶 **Экономичность**: работает только в меню-баре без иконки в Dock, данные читаются только при изменении буфера, мониторинг засыпает вместе с системой.
-
-## Управление
-
-| Клавиши | Действие |
-|---|---|
-| <kbd>⇧⌘V</kbd> | Показать/скрыть историю |
-| Ввод текста | Поиск (все слова, без учёта регистра) |
-| <kbd>↑</kbd> <kbd>↓</kbd> | Выбор записи |
-| <kbd>⏎</kbd> / двойной клик | Вставить |
-| <kbd>⌘1</kbd> … <kbd>⌘9</kbd> | Вставить запись по номеру |
-| <kbd>⌘⌫</kbd> | Удалить запись |
-| <kbd>Esc</kbd> | Закрыть |
-
-В меню-баре доступны пауза записи, включение и выключение автовставки, очистка истории и настройки.
-
-## Установка
-
-Готовых сборок пока нет, приложение собирается из исходников.
-
-**Нужно:** macOS 14+, [Rust](https://rustup.rs) и Swift toolchain. Хватает Command Line Tools (`xcode-select --install`), полный Xcode не обязателен.
+Requires macOS 14 or later (Apple silicon and Intel).
 
 ```sh
-git clone https://github.com/Kamaliev/clipvault.git
-cd clipvault
-make run                      # соберёт build/Clipvault.app и запустит его
+brew install --cask Kamaliev/tap/clipvault
 ```
 
-Чтобы установить приложение насовсем, скопируйте `build/Clipvault.app` в `/Applications`.
+Releases are signed ad hoc, not notarized. The cask removes the quarantine attribute on install;
+if you download the archive manually, run `xattr -dr com.apple.quarantine /Applications/Clipvault.app`.
 
-### Разрешения
+To build from source, see [Development](#development).
 
-| Разрешение | Зачем | Без него |
+### Permissions
+
+| Permission | Purpose | Without it |
 |---|---|---|
-| **Универсальный доступ** (Accessibility) | Отправить <kbd>⌘V</kbd> в активное приложение | Запись только копируется в буфер, вставлять нужно вручную |
-| **Keychain** | Хранить ключ шифрования | История хранится только в памяти до перезапуска |
+| Accessibility | Send <kbd>⌘V</kbd> to the frontmost application (auto-paste) | The record is copied to the pasteboard; paste manually |
+| Keychain | Store the encryption key | History is kept in memory only until the next launch |
 
-> [!NOTE]
-> По умолчанию сборка подписывается ad-hoc. После каждой пересборки подпись меняется, поэтому macOS
-> может заново спросить доступ к Keychain и сбросить Accessibility. Чтобы этого не было, подпишите приложение
-> своим сертификатом: `SIGN_IDENTITY="Apple Development: …" make app`.
+## Features
 
-## Безопасность
+- Global hotkey, <kbd>⇧⌘V</kbd> by default, configurable in Settings.
+- Captures text, RTF, HTML, images (with thumbnails) and file lists. All pasteboard representations
+  are restored on paste, so formatting is preserved.
+- Optional auto-paste into the application that was active when the panel was opened.
+- Instant search over text, file paths and source application name.
+- Per-record encryption (XChaCha20-Poly1305); master key in the Keychain.
+- Records expire after 24 hours. Expired records are hidden immediately and securely deleted.
+- Content flagged by password managers as concealed or transient is ignored.
+- Menu-bar only; no Dock icon. The pasteboard is read only when its change counter advances.
 
-```
-master key (32 байта, Keychain)
-   └─ HKDF-SHA256 ─┬─ ключ шифрования → XChaCha20-Poly1305 (случайный nonce на каждый блоб)
-                   └─ ключ хеша     → keyed BLAKE3 (дедупликация без раскрытия содержимого)
-```
+## Usage
 
-- **Что шифруется:** содержимое всех форматов, превью, поисковый текст, название приложения-источника и миниатюры.
-- **Что хранится открыто:** только id, тип записи (текст, картинка и т.д.), время и размер.
-- **Целостность:** AAD привязывает каждый блоб к его записи, поэтому подмена или перестановка данных в базе обнаруживается.
-- **Удаление:** SQLite `secure_delete=ON`, журнал без WAL; права `0700` на каталог и `0600` на файл.
-- **Ключ:** создаётся при первом запуске (`SecRandomCopyBytes`) с атрибутом `AfterFirstUnlockThisDeviceOnly`, поэтому не попадает в iCloud и бэкапы на другие устройства. В памяти Rust ключи затираются (`zeroize`).
-- **Потеря ключа:** если ключ удалён из Keychain, старую историю расшифровать нельзя, и база пересоздаётся автоматически.
-
-**Модель угроз.** Clipvault защищает историю на диске: от кражи диска или бэкапа, от других пользователей
-системы и от программ, которые просто читают файлы. От вредоносного кода, запущенного под вашим пользователем
-с доступом к вашему Keychain или к самому буферу обмена, он не защищает. Этого не может ни один менеджер буфера обмена.
-
-База данных: `~/Library/Application Support/Clipvault/history.db`
-
-## Архитектура
-
-```mermaid
-flowchart LR
-    subgraph Swift["Clipvault.app — SwiftUI / AppKit"]
-        M[PasteboardMonitor<br/>changeCount polling]
-        H[GlobalHotKey<br/>Carbon]
-        P[PopupPanel<br/>NSPanel + SwiftUI]
-        K[KeychainKey]
-        X[Paster<br/>NSPasteboard + CGEvent ⌘V]
-    end
-    subgraph Rust["clipvault-core — Rust"]
-        S[Store<br/>SQLite]
-        C[Crypto<br/>XChaCha20-Poly1305, HKDF, BLAKE3]
-        V[Preview / Search<br/>RTF·HTML → text]
-    end
-    M -- add --> S
-    P -- list / get --> S
-    K -- master key --> S
-    S --- C
-    S --- V
-    P --> X
-    H --> P
-```
-
-Swift-часть отвечает за всё, что связано с macOS: меню-бар, окно, горячую клавишу, буфер обмена, Keychain и вставку.
-Rust-ядро отвечает за хранение, шифрование, срок жизни записей, дедупликацию, извлечение текста из RTF и HTML и поиск.
-Связка сделана через [UniFFI](https://github.com/mozilla/uniffi-rs): Swift-биндинги генерируются из Rust-кода при сборке,
-а ядро линкуется статической библиотекой.
-
-```
-.
-├── core/                 # Rust crate clipvault-core
-│   ├── src/
-│   │   ├── crypto.rs     # AEAD, HKDF, keyed hash
-│   │   ├── store.rs      # SQLite, TTL, дедупликация, UniFFI API
-│   │   ├── preview.rs    # определение типа, RTF/HTML → текст, поиск
-│   │   └── model.rs      # типы, экспортируемые в Swift
-│   └── tests/store.rs
-├── app/                  # Swift Package (+ project.yml для xcodegen)
-│   ├── Sources/Clipvault/
-│   └── Resources/Info.plist
-├── scripts/
-│   ├── build-core.sh     # cargo build → .a + генерация биндингов
-│   └── bundle-app.sh     # swift build → Clipvault.app + codesign
-└── Makefile
-```
-
-## Разработка
-
-```sh
-make test       # тесты Rust-ядра
-make lint       # clippy -D warnings
-make core       # только ядро и биндинги
-make app        # собрать .app
-make xcode      # сгенерировать Xcode-проект (нужны xcodegen и Xcode)
-make clean
-```
-
-| Переменная | Назначение |
+| Keys | Action |
 |---|---|
-| `UNIVERSAL=1` | Universal binary arm64 + x86_64 (сначала выполните `rustup target add x86_64-apple-darwin`) |
-| `SIGN_IDENTITY` | Сертификат для `codesign` (по умолчанию `-`, т.е. ad-hoc) |
-| `PROFILE=debug` | Отладочная сборка ядра |
+| <kbd>⇧⌘V</kbd> | Show or hide history |
+| Typing | Filter (all words, case-insensitive) |
+| <kbd>↑</kbd> <kbd>↓</kbd> | Move selection |
+| <kbd>⏎</kbd> or double-click | Paste |
+| <kbd>⌘1</kbd> … <kbd>⌘9</kbd> | Paste the n-th record |
+| <kbd>⌘⌫</kbd> | Delete record |
+| <kbd>Esc</kbd> | Close |
 
-Окно истории можно открыть и без горячей клавиши, например из Shortcuts или скрипта:
+The menu-bar menu provides pause, auto-paste toggle, clear history and Settings.
+
+The panel can also be toggled externally, for example from Shortcuts:
 
 ```sh
 osascript -l JavaScript -e "ObjC.import('Foundation'); \$.NSDistributedNotificationCenter.defaultCenter.postNotificationNameObjectUserInfoDeliverImmediately('com.kamaliev.clipvault.toggle', \$(), \$(), true)"
 ```
 
-## Ограничения и планы
+## Security
 
-- [ ] Подписанные и нотаризованные релизы
-- [ ] Закрепление записей (без удаления через 24 ч)
-- [ ] Настраиваемый срок хранения и список исключённых приложений
-- [ ] Автозапуск при входе в систему
-- [ ] OCR для поиска по изображениям
-- Для файлов сохраняются только пути, не содержимое.
-- Автовставка отправляет код клавиши `V` раскладки ANSI. В раскладках вроде Dvorak она может не сработать.
+```
+master key (32 bytes, Keychain)
+   └─ HKDF-SHA256 ─┬─ encryption key → XChaCha20-Poly1305, random nonce per blob
+                   └─ hash key       → keyed BLAKE3, content-blind deduplication
+```
 
-## Лицензия
+- Encrypted: all representations, preview text, search text, source application name, thumbnails.
+- Plaintext metadata: record id, kind (text, image, …), timestamp, size.
+- Integrity: AAD binds every blob to its record; tampering or reordering is detected.
+- Deletion: SQLite `secure_delete=ON`, no WAL; directory `0700`, database `0600`.
+- Key: generated on first launch (`SecRandomCopyBytes`) with `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly`;
+  it is not synced to iCloud or included in portable backups. Keys are zeroized in memory.
+- Key loss: if the Keychain item is removed, existing history cannot be decrypted and the database is recreated.
+
+**Threat model.** Clipvault protects history at rest: against disk or backup theft, other local users
+and processes that merely read files. It does not protect against code running under the same user
+account with access to the Keychain or the system pasteboard. No clipboard manager can.
+
+Database location: `~/Library/Application Support/Clipvault/history.db`.
+
+## Architecture
+
+The Swift layer owns everything macOS-specific: menu bar, panel, hotkey, pasteboard, Keychain and
+paste injection. The Rust core owns storage, cryptography, retention, deduplication, RTF/HTML text
+extraction and search. The two are bound with [UniFFI](https://github.com/mozilla/uniffi-rs);
+Swift bindings are generated at build time and the core is linked as a static library.
+
+```
+core/                 Rust crate clipvault-core
+  src/crypto.rs       AEAD, HKDF, keyed hash
+  src/store.rs        SQLite, TTL, deduplication, UniFFI API
+  src/preview.rs      kind detection, RTF/HTML → text, search
+  src/model.rs        types exported to Swift
+  tests/store.rs
+app/                  Swift package (plus project.yml for xcodegen)
+  Sources/Clipvault/
+  Resources/Info.plist
+scripts/
+  build-core.sh       cargo build → .a + Swift bindings
+  bundle-app.sh       swift build → Clipvault.app + codesign
+```
+
+## Development
+
+Requires Xcode Command Line Tools and a stable Rust toolchain.
+
+```sh
+make app        # build/Clipvault.app
+make run        # build and launch
+make test       # Rust core tests
+make lint       # rustfmt --check and clippy -D warnings
+make dist       # universal build + zip (used by the release workflow)
+make xcode      # generate app/Clipvault.xcodeproj (requires xcodegen and Xcode)
+```
+
+| Variable | Effect |
+|---|---|
+| `UNIVERSAL=1` | Build arm64 + x86_64 (`rustup target add x86_64-apple-darwin` first) |
+| `SIGN_IDENTITY` | `codesign` identity; default `-` (ad hoc) |
+| `VERSION` | Bundle version; defaults to `git describe` |
+| `PROFILE=debug` | Debug build of the core |
+
+Ad-hoc signatures change on every rebuild, so macOS may re-prompt for Keychain access and reset the
+Accessibility grant. Sign with a stable identity to avoid this: `SIGN_IDENTITY="Apple Development: …" make app`.
+
+### Releasing
+
+Push a tag `vX.Y.Z`. The release workflow builds a universal binary, publishes it to GitHub Releases
+and, if the `HOMEBREW_TAP_TOKEN` secret is set, updates the cask in `Kamaliev/homebrew-tap`.
+
+## Limitations
+
+- Releases are not notarized.
+- File records store paths only, not content.
+- Auto-paste sends the ANSI key code for `V`; it may not work on layouts such as Dvorak.
+- Retention period and application exclusions are not configurable yet.
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md). Security issues: [SECURITY.md](SECURITY.md).
+
+## License
 
 [MIT](LICENSE)

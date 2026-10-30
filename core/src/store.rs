@@ -2,7 +2,7 @@ use std::path::Path;
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use rusqlite::{params, Connection, OptionalExtension};
+use rusqlite::{Connection, OptionalExtension, params};
 
 use crate::crypto::Keys;
 use crate::error::{CoreError, Result};
@@ -23,7 +23,10 @@ pub struct Store {
 }
 
 fn system_now() -> i64 {
-    SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs() as i64).unwrap_or(0)
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0)
 }
 
 fn hex(b: &[u8]) -> String {
@@ -74,7 +77,10 @@ impl Meta {
         let mut out = Vec::new();
         put_bytes(&mut out, self.preview.as_bytes());
         put_bytes(&mut out, self.search.as_bytes());
-        put_bytes(&mut out, self.source_app.as_deref().unwrap_or("").as_bytes());
+        put_bytes(
+            &mut out,
+            self.source_app.as_deref().unwrap_or("").as_bytes(),
+        );
         out
     }
 
@@ -82,7 +88,11 @@ impl Meta {
         let preview = take_str(&mut b)?;
         let search = take_str(&mut b)?;
         let app = take_str(&mut b)?;
-        Ok(Self { preview, search, source_app: (!app.is_empty()).then_some(app) })
+        Ok(Self {
+            preview,
+            search,
+            source_app: (!app.is_empty()).then_some(app),
+        })
     }
 }
 
@@ -112,7 +122,13 @@ fn restrict_permissions(path: &Path, mode: u32) {
 }
 
 impl Store {
-    pub fn open_with_clock(path: &str, key: &[u8], ttl_secs: u64, max_bytes: u64, clock: Clock) -> Result<Self> {
+    pub fn open_with_clock(
+        path: &str,
+        key: &[u8],
+        ttl_secs: u64,
+        max_bytes: u64,
+        clock: Clock,
+    ) -> Result<Self> {
         let keys = Keys::derive(key)?;
         let conn = if path == ":memory:" {
             Connection::open_in_memory()?
@@ -149,11 +165,14 @@ impl Store {
              );
              PRAGMA user_version = 1;",
         )?;
-        let check: Option<Vec<u8>> =
-            conn.query_row("SELECT value FROM kv WHERE key = 'check'", [], |r| r.get(0)).optional()?;
+        let check: Option<Vec<u8>> = conn
+            .query_row("SELECT value FROM kv WHERE key = 'check'", [], |r| r.get(0))
+            .optional()?;
         match check {
             Some(sealed) => {
-                let pt = keys.open(&sealed, b"check").map_err(|_| CoreError::KeyMismatch)?;
+                let pt = keys
+                    .open(&sealed, b"check")
+                    .map_err(|_| CoreError::KeyMismatch)?;
                 if pt.as_slice() != CHECK_PLAINTEXT {
                     return Err(CoreError::KeyMismatch);
                 }
@@ -198,7 +217,11 @@ impl Store {
     /// Stores a clipboard snapshot. Returns the entry id, or `None` if it was skipped
     /// (empty or larger than `max_bytes`). Re-copying identical content moves it to the top.
     pub fn add(&self, clip: NewClip) -> Result<Option<i64>> {
-        let reps: Vec<ClipRep> = clip.reps.into_iter().filter(|r| !r.data.is_empty()).collect();
+        let reps: Vec<ClipRep> = clip
+            .reps
+            .into_iter()
+            .filter(|r| !r.data.is_empty())
+            .collect();
         let size: u64 = reps.iter().map(|r| r.data.len() as u64).sum();
         if reps.is_empty() || size > self.max_bytes {
             return Ok(None);
@@ -208,19 +231,33 @@ impl Store {
         if kind != ClipKind::Image && search.trim().is_empty() {
             return Ok(None);
         }
-        let hash = self.keys.content_hash(reps.iter().map(|r| (r.uti.as_str(), r.data.as_slice())));
+        let hash = self
+            .keys
+            .content_hash(reps.iter().map(|r| (r.uti.as_str(), r.data.as_slice())));
         let now = (self.clock)();
 
         let mut conn = self.conn();
         let tx = conn.transaction()?;
-        let existing: Option<i64> =
-            tx.query_row("SELECT id FROM entry WHERE hash = ?1", params![&hash[..]], |r| r.get(0)).optional()?;
+        let existing: Option<i64> = tx
+            .query_row(
+                "SELECT id FROM entry WHERE hash = ?1",
+                params![&hash[..]],
+                |r| r.get(0),
+            )
+            .optional()?;
         if let Some(id) = existing {
-            tx.execute("UPDATE entry SET created_at = ?1 WHERE id = ?2", params![now, id])?;
+            tx.execute(
+                "UPDATE entry SET created_at = ?1 WHERE id = ?2",
+                params![now, id],
+            )?;
             tx.commit()?;
             return Ok(Some(id));
         }
-        let meta = Meta { preview: preview::make_preview(&search), search, source_app: clip.source_app };
+        let meta = Meta {
+            preview: preview::make_preview(&search),
+            search,
+            source_app: clip.source_app,
+        };
         let meta_ct = self.keys.seal(&meta.encode(), &aad_meta(&hash))?;
         let thumb_ct = match clip.thumbnail.filter(|t| !t.is_empty()) {
             Some(t) => Some(self.keys.seal(&t, &aad_thumb(&hash))?),
@@ -234,7 +271,10 @@ impl Store {
         for (idx, r) in reps.iter().enumerate() {
             let pt = zeroize::Zeroizing::new(encode_rep(r));
             let ct = self.keys.seal(&pt, &aad_rep(&hash, idx))?;
-            tx.execute("INSERT INTO rep (entry_id, idx, payload) VALUES (?1, ?2, ?3)", params![id, idx as i64, ct])?;
+            tx.execute(
+                "INSERT INTO rep (entry_id, idx, payload) VALUES (?1, ?2, ?3)",
+                params![id, idx as i64, ct],
+            )?;
         }
         tx.commit()?;
         Ok(Some(id))
@@ -262,9 +302,13 @@ impl Store {
         let mut out = Vec::new();
         for row in rows {
             let (id, hash, kind, created_at, size, meta_ct, has_thumbnail) = row?;
-            let Ok(pt) = self.keys.open(&meta_ct, &aad_meta(&hash)) else { continue };
+            let Ok(pt) = self.keys.open(&meta_ct, &aad_meta(&hash)) else {
+                continue;
+            };
             let meta = Meta::decode(&pt)?;
-            if !query.trim().is_empty() && !preview::matches(&query, &meta.search, meta.source_app.as_deref()) {
+            if !query.trim().is_empty()
+                && !preview::matches(&query, &meta.search, meta.source_app.as_deref())
+            {
                 continue;
             }
             out.push(ClipSummary {
@@ -287,13 +331,18 @@ impl Store {
     pub fn get(&self, id: i64) -> Result<Vec<ClipRep>> {
         let conn = self.conn();
         let hash: Vec<u8> = conn
-            .query_row("SELECT hash FROM entry WHERE id = ?1 AND created_at > ?2", params![id, self.cutoff()], |r| {
-                r.get(0)
-            })
+            .query_row(
+                "SELECT hash FROM entry WHERE id = ?1 AND created_at > ?2",
+                params![id, self.cutoff()],
+                |r| r.get(0),
+            )
             .optional()?
             .ok_or(CoreError::NotFound)?;
-        let mut stmt = conn.prepare("SELECT idx, payload FROM rep WHERE entry_id = ?1 ORDER BY idx")?;
-        let rows = stmt.query_map(params![id], |r| Ok((r.get::<_, i64>(0)?, r.get::<_, Vec<u8>>(1)?)))?;
+        let mut stmt =
+            conn.prepare("SELECT idx, payload FROM rep WHERE entry_id = ?1 ORDER BY idx")?;
+        let rows = stmt.query_map(params![id], |r| {
+            Ok((r.get::<_, i64>(0)?, r.get::<_, Vec<u8>>(1)?))
+        })?;
         let mut reps = Vec::new();
         for row in rows {
             let (idx, ct) = row?;
@@ -306,7 +355,11 @@ impl Store {
     pub fn thumbnail(&self, id: i64) -> Result<Option<Vec<u8>>> {
         let conn = self.conn();
         let row: Option<(Vec<u8>, Option<Vec<u8>>)> = conn
-            .query_row("SELECT hash, thumb FROM entry WHERE id = ?1", params![id], |r| Ok((r.get(0)?, r.get(1)?)))
+            .query_row(
+                "SELECT hash, thumb FROM entry WHERE id = ?1",
+                params![id],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
             .optional()?;
         match row {
             Some((hash, Some(ct))) => Ok(Some(self.keys.open(&ct, &aad_thumb(&hash))?.to_vec())),
@@ -317,12 +370,20 @@ impl Store {
 
     /// Moves an entry to the top (used after pasting it).
     pub fn touch(&self, id: i64) -> Result<()> {
-        let n = self.conn().execute("UPDATE entry SET created_at = ?1 WHERE id = ?2", params![(self.clock)(), id])?;
-        if n == 0 { Err(CoreError::NotFound) } else { Ok(()) }
+        let n = self.conn().execute(
+            "UPDATE entry SET created_at = ?1 WHERE id = ?2",
+            params![(self.clock)(), id],
+        )?;
+        if n == 0 {
+            Err(CoreError::NotFound)
+        } else {
+            Ok(())
+        }
     }
 
     pub fn delete(&self, id: i64) -> Result<()> {
-        self.conn().execute("DELETE FROM entry WHERE id = ?1", params![id])?;
+        self.conn()
+            .execute("DELETE FROM entry WHERE id = ?1", params![id])?;
         Ok(())
     }
 
@@ -335,14 +396,19 @@ impl Store {
 
     /// Removes entries older than the TTL. Returns the number of removed entries.
     pub fn purge_expired(&self) -> Result<u32> {
-        let n = self.conn().execute("DELETE FROM entry WHERE created_at <= ?1", params![self.cutoff()])?;
+        let n = self.conn().execute(
+            "DELETE FROM entry WHERE created_at <= ?1",
+            params![self.cutoff()],
+        )?;
         Ok(n as u32)
     }
 
     pub fn count(&self) -> Result<u32> {
-        let n: i64 = self
-            .conn()
-            .query_row("SELECT COUNT(*) FROM entry WHERE created_at > ?1", params![self.cutoff()], |r| r.get(0))?;
+        let n: i64 = self.conn().query_row(
+            "SELECT COUNT(*) FROM entry WHERE created_at > ?1",
+            params![self.cutoff()],
+            |r| r.get(0),
+        )?;
         Ok(n as u32)
     }
 }

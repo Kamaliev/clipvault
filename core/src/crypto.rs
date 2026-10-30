@@ -41,7 +41,13 @@ impl Keys {
         getrandom::fill(&mut nonce).map_err(|e| CoreError::Io(e.to_string()))?;
         let ct = self
             .cipher
-            .encrypt(&XNonce::from(nonce), Payload { msg: plaintext, aad })
+            .encrypt(
+                &XNonce::from(nonce),
+                Payload {
+                    msg: plaintext,
+                    aad,
+                },
+            )
             .map_err(|_| CoreError::Decrypt)?;
         let mut out = Vec::with_capacity(NONCE_LEN + ct.len());
         out.extend_from_slice(&nonce);
@@ -62,7 +68,10 @@ impl Keys {
     }
 
     /// Keyed content hash used for deduplication; doesn't leak content without the key.
-    pub fn content_hash<'a>(&self, parts: impl IntoIterator<Item = (&'a str, &'a [u8])>) -> [u8; 32] {
+    pub fn content_hash<'a>(
+        &self,
+        parts: impl IntoIterator<Item = (&'a str, &'a [u8])>,
+    ) -> [u8; 32] {
         let mut h = blake3::Hasher::new_keyed(&self.hash_key);
         for (uti, data) in parts {
             h.update(&(uti.len() as u64).to_le_bytes());
@@ -105,7 +114,10 @@ mod tests {
 
     #[test]
     fn invalid_key_length() {
-        assert!(matches!(Keys::derive(&[0u8; 16]), Err(CoreError::InvalidKey(_))));
+        assert!(matches!(
+            Keys::derive(&[0u8; 16]),
+            Err(CoreError::InvalidKey(_))
+        ));
     }
 
     #[test]

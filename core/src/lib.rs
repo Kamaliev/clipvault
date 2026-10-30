@@ -6,6 +6,6 @@ mod store;
 
 pub use error::CoreError;
 pub use model::{ClipKind, ClipRep, ClipSummary, NewClip};
-pub use store::{delete_store_files, Store};
+pub use store::{Store, delete_store_files};
 
 uniffi::setup_scaffolding!();

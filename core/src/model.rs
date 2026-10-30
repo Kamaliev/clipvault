@@ -2,7 +2,12 @@ pub const UTI_TEXT: &str = "public.utf8-plain-text";
 pub const UTI_RTF: &str = "public.rtf";
 pub const UTI_HTML: &str = "public.html";
 pub const UTI_FILE_URL: &str = "public.file-url";
-pub const IMAGE_UTIS: &[&str] = &["public.png", "public.tiff", "public.jpeg", "com.compuserve.gif"];
+pub const IMAGE_UTIS: &[&str] = &[
+    "public.png",
+    "public.tiff",
+    "public.jpeg",
+    "com.compuserve.gif",
+];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
 pub enum ClipKind {

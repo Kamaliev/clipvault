@@ -1,7 +1,7 @@
-use std::sync::atomic::{AtomicI64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicI64, Ordering};
 
-use clipvault_core::{delete_store_files, ClipKind, ClipRep, CoreError, NewClip, Store};
+use clipvault_core::{ClipKind, ClipRep, CoreError, NewClip, Store, delete_store_files};
 
 const KEY: [u8; 32] = [7u8; 32];
 const DAY: u64 = 24 * 3600;
@@ -15,13 +15,28 @@ struct Env {
 impl Env {
     fn new() -> Self {
         let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("sub/history.db").to_str().unwrap().to_string();
-        Self { _dir: dir, path, now: Arc::new(AtomicI64::new(1_000_000)) }
+        let path = dir
+            .path()
+            .join("sub/history.db")
+            .to_str()
+            .unwrap()
+            .to_string();
+        Self {
+            _dir: dir,
+            path,
+            now: Arc::new(AtomicI64::new(1_000_000)),
+        }
     }
 
     fn open_with(&self, key: &[u8], max: u64) -> Result<Store, CoreError> {
         let now = self.now.clone();
-        Store::open_with_clock(&self.path, key, DAY, max, Box::new(move || now.load(Ordering::SeqCst)))
+        Store::open_with_clock(
+            &self.path,
+            key,
+            DAY,
+            max,
+            Box::new(move || now.load(Ordering::SeqCst)),
+        )
     }
 
     fn open(&self) -> Store {
@@ -35,7 +50,11 @@ impl Env {
 
 fn text(s: &str) -> NewClip {
     NewClip {
-        reps: vec![ClipRep { item: 0, uti: "public.utf8-plain-text".into(), data: s.as_bytes().to_vec() }],
+        reps: vec![ClipRep {
+            item: 0,
+            uti: "public.utf8-plain-text".into(),
+            data: s.as_bytes().to_vec(),
+        }],
         source_app: Some("Notes".into()),
         thumbnail: None,
     }
@@ -47,8 +66,16 @@ fn add_list_get_roundtrip() {
     let s = env.open();
     let clip = NewClip {
         reps: vec![
-            ClipRep { item: 0, uti: "public.rtf".into(), data: br"{\rtf1 Hi \b there}".to_vec() },
-            ClipRep { item: 0, uti: "public.utf8-plain-text".into(), data: b"Hi there".to_vec() },
+            ClipRep {
+                item: 0,
+                uti: "public.rtf".into(),
+                data: br"{\rtf1 Hi \b there}".to_vec(),
+            },
+            ClipRep {
+                item: 0,
+                uti: "public.utf8-plain-text".into(),
+                data: b"Hi there".to_vec(),
+            },
         ],
         source_app: Some("TextEdit".into()),
         thumbnail: None,
@@ -95,7 +122,15 @@ fn skips_empty_and_oversized() {
     let env = Env::new();
     let s = env.open();
     assert_eq!(s.add(text("   ")).unwrap(), None);
-    assert_eq!(s.add(NewClip { reps: vec![], source_app: None, thumbnail: None }).unwrap(), None);
+    assert_eq!(
+        s.add(NewClip {
+            reps: vec![],
+            source_app: None,
+            thumbnail: None
+        })
+        .unwrap(),
+        None
+    );
     assert_eq!(s.add(text(&"x".repeat(2000))).unwrap(), None);
     assert_eq!(s.count().unwrap(), 0);
 }
@@ -135,7 +170,11 @@ fn image_thumbnail_delete_clear_touch() {
     let s = env.open();
     let img = s
         .add(NewClip {
-            reps: vec![ClipRep { item: 0, uti: "public.png".into(), data: vec![1, 2, 3] }],
+            reps: vec![ClipRep {
+                item: 0,
+                uti: "public.png".into(),
+                data: vec![1, 2, 3],
+            }],
             source_app: None,
             thumbnail: Some(vec![9, 9]),
         })
@@ -162,8 +201,14 @@ fn image_thumbnail_delete_clear_touch() {
 fn wrong_key_is_detected_and_store_can_be_reset() {
     let env = Env::new();
     env.open().add(text("x")).unwrap();
-    assert!(matches!(env.open_with(&[8u8; 32], 1024), Err(CoreError::KeyMismatch)));
-    assert!(matches!(env.open_with(&[1u8; 3], 1024), Err(CoreError::InvalidKey(_))));
+    assert!(matches!(
+        env.open_with(&[8u8; 32], 1024),
+        Err(CoreError::KeyMismatch)
+    ));
+    assert!(matches!(
+        env.open_with(&[1u8; 3], 1024),
+        Err(CoreError::InvalidKey(_))
+    ));
     delete_store_files(env.path.clone()).unwrap();
     let s = env.open_with(&[8u8; 32], 1024).unwrap();
     assert_eq!(s.count().unwrap(), 0);
@@ -178,10 +223,25 @@ fn multiple_file_items_roundtrip() {
     let env = Env::new();
     let s = env.open();
     let reps = vec![
-        ClipRep { item: 0, uti: "public.file-url".into(), data: b"file:///a/b%20c.txt".to_vec() },
-        ClipRep { item: 1, uti: "public.file-url".into(), data: b"file:///d.png".to_vec() },
+        ClipRep {
+            item: 0,
+            uti: "public.file-url".into(),
+            data: b"file:///a/b%20c.txt".to_vec(),
+        },
+        ClipRep {
+            item: 1,
+            uti: "public.file-url".into(),
+            data: b"file:///d.png".to_vec(),
+        },
     ];
-    let id = s.add(NewClip { reps: reps.clone(), source_app: Some("Finder".into()), thumbnail: None }).unwrap().unwrap();
+    let id = s
+        .add(NewClip {
+            reps: reps.clone(),
+            source_app: Some("Finder".into()),
+            thumbnail: None,
+        })
+        .unwrap()
+        .unwrap();
     let e = &s.list(None, 10).unwrap()[0];
     assert_eq!(e.kind, ClipKind::Files);
     assert_eq!(e.preview, "/a/b c.txt /d.png");

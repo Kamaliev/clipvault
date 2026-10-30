@@ -74,7 +74,7 @@ struct HistoryView: View {
         VStack(spacing: 0) {
             HStack(spacing: 8) {
                 Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
-                TextField("Поиск по истории", text: $model.query)
+                TextField("Search history", text: $model.query)
                     .textFieldStyle(.plain)
                     .font(.system(size: 16))
                     .focused($searchFocused)
@@ -87,7 +87,7 @@ struct HistoryView: View {
 
             if model.items.isEmpty {
                 Spacer()
-                Text(model.query.isEmpty ? "История пуста" : "Ничего не найдено")
+                Text(model.query.isEmpty ? "History is empty" : "No results")
                     .foregroundStyle(.secondary)
                 Spacer()
             } else {
@@ -113,14 +113,14 @@ struct HistoryView: View {
 
             Divider()
             HStack {
-                Text("⏎ вставить · ⌘1–9 выбор · ⌘⌫ удалить · esc")
+                Text("⏎ paste · ⌘1–9 select · ⌘⌫ delete · esc")
                     .lineLimit(1)
                 Spacer(minLength: 8)
                 if !model.accessibilityGranted {
-                    Text("Нет доступа Accessibility — только копирование")
+                    Text("No Accessibility access: copy only")
                         .lineLimit(1)
                         .foregroundStyle(.orange)
-                        .help("Разрешите доступ в меню Clipvault, чтобы включить автовставку")
+                        .help("Grant access from the Clipvault menu to enable auto-paste")
                 }
             }
             .font(.system(size: 11))
@@ -177,14 +177,14 @@ struct HistoryRow: View {
     }
 
     private var title: String {
-        if item.kind == .image { return "Изображение · " + ByteCountFormatter.string(fromByteCount: Int64(item.size), countStyle: .file) }
-        return item.preview.isEmpty ? "(без текста)" : item.preview
+        if item.kind == .image { return "Image · " + ByteCountFormatter.string(fromByteCount: Int64(item.size), countStyle: .file) }
+        return item.preview.isEmpty ? "(no text)" : item.preview
     }
 
     private var subtitle: String {
         let date = Date(timeIntervalSince1970: TimeInterval(item.createdAt))
         let rel = Date().timeIntervalSince(date) < 60
-            ? "только что"
+            ? "just now"
             : Self.relative.localizedString(for: date, relativeTo: Date())
         return [item.sourceApp, rel].compactMap { $0 }.joined(separator: " · ")
     }
