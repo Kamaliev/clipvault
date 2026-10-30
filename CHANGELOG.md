@@ -6,6 +6,12 @@ the project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-10-30
+
+### Added
+
+- Launch at login toggle (Settings and menu bar), backed by `SMAppService`.
+
 ## [0.1.0] - 2026-10-30
 
 ### Added
@@ -17,5 +23,6 @@ the project uses [Semantic Versioning](https://semver.org/).
 - Password-manager concealed/transient content is ignored.
 - Homebrew cask distribution via `Kamaliev/tap`.
 
-[Unreleased]: https://github.com/Kamaliev/clipvault/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/Kamaliev/clipvault/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/Kamaliev/clipvault/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/Kamaliev/clipvault/releases/tag/v0.1.0

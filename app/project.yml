@@ -28,3 +28,4 @@ targets:
     dependencies:
       - sdk: Carbon.framework
       - sdk: Security.framework
+      - sdk: ServiceManagement.framework

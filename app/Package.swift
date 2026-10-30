@@ -21,6 +21,7 @@ let package = Package(
                 .unsafeFlags(["-L", coreLibDir]),
                 .linkedFramework("Carbon"),
                 .linkedFramework("Security"),
+                .linkedFramework("ServiceManagement"),
             ]
         ),
     ]

@@ -41,6 +41,7 @@ To build from source, see [Development](#development).
 - Per-record encryption (XChaCha20-Poly1305); master key in the Keychain.
 - Records expire after 24 hours. Expired records are hidden immediately and securely deleted.
 - Content flagged by password managers as concealed or transient is ignored.
+- Optional launch at login.
 - Menu-bar only; no Dock icon. The pasteboard is read only when its change counter advances.
 
 ## Usage
@@ -55,7 +56,7 @@ To build from source, see [Development](#development).
 | <kbd>⌘⌫</kbd> | Delete record |
 | <kbd>Esc</kbd> | Close |
 
-The menu-bar menu provides pause, auto-paste toggle, clear history and Settings.
+The menu-bar menu provides pause, auto-paste and launch-at-login toggles, clear history and Settings.
 
 The panel can also be toggled externally, for example from Shortcuts:
 

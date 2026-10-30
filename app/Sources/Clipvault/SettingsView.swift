@@ -19,6 +19,14 @@ struct SettingsView: View {
                 Text(error).foregroundStyle(.red)
             }
             Toggle("Paste selected item automatically (⌘V)", isOn: $model.autoPaste)
+            Toggle("Launch at login", isOn: $model.launchAtLogin)
+                .disabled(!LaunchAtLogin.isAvailable)
+            if let error = model.launchAtLoginError {
+                HStack {
+                    Text(error).foregroundStyle(.orange)
+                    Button("Open Login Items…") { LaunchAtLogin.openSystemSettings() }
+                }
+            }
             LabeledContent("Accessibility access") {
                 if model.accessibilityGranted {
                     Text("granted").foregroundStyle(.green)

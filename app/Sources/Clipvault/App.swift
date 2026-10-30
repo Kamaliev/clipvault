@@ -31,6 +31,7 @@ struct MenuContent: View {
         Divider()
         Toggle("Pause Recording", isOn: $model.paused)
         Toggle("Auto-Paste", isOn: $model.autoPaste)
+        Toggle("Launch at Login", isOn: $model.launchAtLogin)
         if !model.accessibilityGranted {
             Button("Enable Auto-Paste (Accessibility)…") { model.requestAccessibility() }
         }

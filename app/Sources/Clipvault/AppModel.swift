@@ -18,6 +18,19 @@ final class AppModel: ObservableObject {
         didSet { saveHotKey(); registerHotKey() }
     }
     @Published private(set) var hotKeyError: String?
+    @Published var launchAtLogin = LaunchAtLogin.isEnabled {
+        didSet {
+            guard launchAtLogin != LaunchAtLogin.isEnabled else { return }
+            do {
+                try LaunchAtLogin.set(launchAtLogin)
+                launchAtLoginError = nil
+            } catch {
+                launchAtLoginError = "Could not update login item: \(error.localizedDescription)"
+                launchAtLogin = LaunchAtLogin.isEnabled
+            }
+        }
+    }
+    @Published private(set) var launchAtLoginError: String?
     @Published private(set) var accessibilityGranted = Paster.isTrusted
     @Published private(set) var storageWarning: String?
     @Published private(set) var entryCount: UInt32 = 0
@@ -86,6 +99,15 @@ final class AppModel: ObservableObject {
         accessibilityGranted = Paster.isTrusted
     }
 
+    /// Re-reads the login item state; the user can change it in System Settings.
+    func refreshLaunchAtLogin() {
+        let enabled = LaunchAtLogin.isEnabled
+        if launchAtLogin != enabled { launchAtLogin = enabled }
+        if LaunchAtLogin.requiresApproval {
+            launchAtLoginError = "Approve Clipvault in System Settings › General › Login Items."
+        }
+    }
+
     func requestAccessibility() {
         Paster.requestAccessibility()
         refreshAccessibility()
@@ -100,6 +122,7 @@ final class AppModel: ObservableObject {
             settingsWindow = window
         }
         refreshAccessibility()
+        refreshLaunchAtLogin()
         refreshCount()
         settingsWindow?.center()
         NSApp.activate(ignoringOtherApps: true)
