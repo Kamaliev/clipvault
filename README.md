@@ -54,6 +54,8 @@ remove it with − and press <kbd>⏎</kbd> again. Versions up to 0.2.1 were sig
 - Per-record encryption (XChaCha20-Poly1305); master key in the Keychain.
 - Records expire after 24 hours unless pinned. Expired records are hidden immediately and securely deleted.
 - Content flagged by password managers as concealed or transient is ignored.
+- Passwords, tokens and keys are masked in the list and the preview (`ghp_••••••3xY5`), so they are
+  not exposed on a shared screen; pasting uses the full text. See [Secret masking](#secret-masking).
 - Optional launch at login.
 - Menu-bar only; no Dock icon. The pasteboard is read only when its change counter advances.
 
@@ -72,11 +74,13 @@ remove it with − and press <kbd>⏎</kbd> again. Versions up to 0.2.1 were sig
 | <kbd>⌘P</kbd> | Pin or unpin |
 | <kbd>Space</kbd> / <kbd>⌘Y</kbd> | Quick Look–style preview (Space types a space while searching) |
 | <kbd>⌘+</kbd> <kbd>⌘−</kbd> <kbd>⌘0</kbd> | Zoom the preview; ⌘0 or double-click toggles fit / actual size |
+| <kbd>⌘R</kbd> | Reveal or hide a masked secret in the preview |
 | <kbd>⌘⌫</kbd> | Delete record |
 | <kbd>Esc</kbd> | Close preview, then the panel |
 | <kbd>⌘,</kbd> | Settings |
 
-Right-click a record for the same actions. Unpinning a record restarts its 24-hour lifetime.
+Right-click a record for the same actions and for **Mark as Secret** / **Not a Secret**.
+Unpinning a record restarts its 24-hour lifetime.
 <kbd>⌥⇧⌘V</kbd> is registered only while a paste sequence is running.
 
 The menu-bar menu provides pause, auto-paste and launch-at-login toggles, the active paste sequence,
@@ -91,6 +95,26 @@ The panel can also be toggled externally, for example from Shortcuts:
 osascript -l JavaScript -e "ObjC.import('Foundation'); \$.NSDistributedNotificationCenter.defaultCenter.postNotificationNameObjectUserInfoDeliverImmediately('com.kamaliev.clipvault.toggle', \$(), \$(), true)"
 ```
 
+### Secret masking
+
+Records containing secrets get a key icon, and the secret part is masked: at most an eighth of it
+(no more than 4 characters) stays visible at each edge, the mask has a fixed width, and secrets
+shorter than 8 characters are hidden completely. Well-known prefixes such as `ghp_` or `sk-ant-`
+stay visible. Detected are:
+
+- tokens of known formats: GitHub, GitLab, OpenAI, Anthropic, AWS access keys, Slack, Stripe, Google,
+  npm, PyPI, Hugging Face, JWT and others;
+- private keys (`-----BEGIN … PRIVATE KEY-----`);
+- values of keys such as `password`, `token`, `secret`, `api_key`, `client_secret`, `пароль`
+  in `key=value`, `key: value` and JSON;
+- the password in `scheme://user:password@host` and credentials after `Bearer` / `Basic`;
+- a record that is a single word looking like a password (letters, digits and symbols mixed) or a
+  generated token (long, high entropy).
+
+Detection is heuristic. Fix a miss or a false alarm with **Mark as Secret** / **Not a Secret**;
+turn masking off in Settings. Masking only hides secrets on screen: search still finds a record by
+its secret, and image thumbnails are not masked.
+
 ## Security
 
 ```
@@ -100,7 +124,7 @@ master key (32 bytes, Keychain)
 ```
 
 - Encrypted: all representations, preview text, search text (including OCR text), source application
-  name, thumbnails.
+  name, thumbnails, the "contains a secret" flag.
 - Plaintext metadata: record id, kind (text, image, …), timestamp, size, pinned flag.
 - Integrity: AAD binds every blob to its record; tampering or reordering is detected.
 - Deletion: SQLite `secure_delete=ON`, no WAL; directory `0700`, database `0600`.
@@ -126,6 +150,7 @@ core/                 Rust crate clipvault-core
   src/crypto.rs       AEAD, HKDF, keyed hash
   src/store.rs        SQLite, TTL, pins, deduplication, UniFFI API
   src/preview.rs      kind detection, RTF/HTML → text, search
+  src/secrets.rs      password/token detection and masking
   src/model.rs        types exported to Swift
   tests/store.rs
 app/                  Swift package (plus project.yml for xcodegen)

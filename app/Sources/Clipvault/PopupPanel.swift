@@ -82,6 +82,10 @@ final class PopupController: NSObject, NSWindowDelegate {
     /// Called when the popup is shown (`true`) or hidden (`false`).
     var onVisibilityChange: ((Bool) -> Void)?
     var onOpenSettings: (() -> Void)?
+    var maskSecrets: Bool {
+        get { viewModel.maskingEnabled }
+        set { viewModel.maskingEnabled = newValue }
+    }
     private let previewer = PreviewController()
     private var previewObserver: AnyCancellable?
     /// Popup origin before it moved aside for the preview window.
@@ -215,6 +219,7 @@ final class PopupController: NSObject, NSWindowDelegate {
             onOpenSettings?()
             return true
         case 16 where mods == .command: viewModel.togglePreview(); return true // ⌘Y
+        case 15 where mods == .command && previewer.isVisible: viewModel.toggleReveal(); return true // ⌘R
         // Space previews like Finder; with a search query it types a space instead.
         case 49 where mods.isEmpty && (viewModel.query.isEmpty || previewer.isVisible):
             viewModel.togglePreview(); return true

@@ -70,4 +70,7 @@ pub struct ClipSummary {
     pub has_thumbnail: bool,
     /// Pinned entries are listed first and never expire.
     pub pinned: bool,
+    /// Contains a password, token or key (detected or marked by the user). When masking is on,
+    /// `preview` shows it masked.
+    pub sensitive: bool,
 }

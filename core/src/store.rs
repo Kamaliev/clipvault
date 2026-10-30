@@ -1,4 +1,5 @@
 use std::path::Path;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -8,6 +9,7 @@ use crate::crypto::Keys;
 use crate::error::{CoreError, Result};
 use crate::model::*;
 use crate::preview;
+use crate::secrets;
 
 type Clock = Box<dyn Fn() -> i64 + Send + Sync>;
 
@@ -20,6 +22,7 @@ pub struct Store {
     ttl_secs: i64,
     max_bytes: u64,
     clock: Clock,
+    mask_secrets: AtomicBool,
 }
 
 fn system_now() -> i64 {
@@ -70,6 +73,48 @@ struct Meta {
     preview: String,
     search: String,
     source_app: Option<String>,
+    /// `None` for records stored before secret detection existed.
+    secret: Option<Sensitivity>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Sensitivity {
+    Plain,
+    Detected,
+    MarkedOn,
+    MarkedOff,
+}
+
+impl Sensitivity {
+    fn detect(text: &str) -> Self {
+        if secrets::find(text).is_empty() {
+            Sensitivity::Plain
+        } else {
+            Sensitivity::Detected
+        }
+    }
+
+    fn sensitive(self) -> bool {
+        matches!(self, Sensitivity::Detected | Sensitivity::MarkedOn)
+    }
+
+    fn to_u8(self) -> u8 {
+        match self {
+            Sensitivity::Plain => 0,
+            Sensitivity::Detected => 1,
+            Sensitivity::MarkedOn => 2,
+            Sensitivity::MarkedOff => 3,
+        }
+    }
+
+    fn from_u8(v: u8) -> Self {
+        match v {
+            1 => Sensitivity::Detected,
+            2 => Sensitivity::MarkedOn,
+            3 => Sensitivity::MarkedOff,
+            _ => Sensitivity::Plain,
+        }
+    }
 }
 
 impl Meta {
@@ -81,6 +126,9 @@ impl Meta {
             &mut out,
             self.source_app.as_deref().unwrap_or("").as_bytes(),
         );
+        if let Some(secret) = self.secret {
+            put_bytes(&mut out, &[secret.to_u8()]);
+        }
         out
     }
 
@@ -88,11 +136,25 @@ impl Meta {
         let preview = take_str(&mut b)?;
         let search = take_str(&mut b)?;
         let app = take_str(&mut b)?;
+        let secret = if b.is_empty() {
+            None
+        } else {
+            take_bytes(&mut b)?
+                .first()
+                .copied()
+                .map(Sensitivity::from_u8)
+        };
         Ok(Self {
             preview,
             search,
             source_app: (!app.is_empty()).then_some(app),
+            secret,
         })
+    }
+
+    fn secret(&self) -> Sensitivity {
+        self.secret
+            .unwrap_or_else(|| Sensitivity::detect(&self.search))
     }
 }
 
@@ -208,6 +270,7 @@ impl Store {
             ttl_secs: ttl_secs as i64,
             max_bytes,
             clock,
+            mask_secrets: AtomicBool::new(true),
         };
         store.purge_expired()?;
         Ok(store)
@@ -279,6 +342,7 @@ impl Store {
         }
         let meta = Meta {
             preview: preview::make_preview(&search),
+            secret: Some(Sensitivity::detect(&search)),
             search,
             source_app: clip.source_app,
         };
@@ -325,6 +389,7 @@ impl Store {
                 r.get::<_, bool>(7)?,
             ))
         })?;
+        let mask = self.mask_secrets.load(Ordering::Relaxed);
         let mut out = Vec::new();
         for row in rows {
             let (id, hash, kind, created_at, size, meta_ct, has_thumbnail, pinned) = row?;
@@ -337,15 +402,25 @@ impl Store {
             {
                 continue;
             }
+            let secret = meta.secret();
+            let preview = if mask && secret.sensitive() {
+                preview::make_preview(&secrets::mask_text(
+                    &meta.search,
+                    secret == Sensitivity::MarkedOn,
+                ))
+            } else {
+                meta.preview
+            };
             out.push(ClipSummary {
                 id,
                 kind: ClipKind::from_i64(kind),
-                preview: meta.preview,
+                preview,
                 source_app: meta.source_app,
                 created_at,
                 size: size as u64,
                 has_thumbnail,
                 pinned,
+                sensitive: secret.sensitive(),
             });
             if out.len() >= limit as usize {
                 break;
@@ -433,6 +508,38 @@ impl Store {
         Ok(())
     }
 
+    /// Masks passwords, tokens and keys in `list` previews (on by default).
+    pub fn set_mask_secrets(&self, on: bool) {
+        self.mask_secrets.store(on, Ordering::Relaxed);
+    }
+
+    /// Overrides secret detection for an entry: marked entries are masked even if nothing was
+    /// detected (the whole text then), unmarked ones are never masked.
+    pub fn set_sensitive(&self, id: i64, sensitive: bool) -> Result<()> {
+        let conn = self.conn();
+        let (hash, meta_ct): (Vec<u8>, Vec<u8>) = conn
+            .query_row(
+                "SELECT hash, meta FROM entry WHERE id = ?1",
+                params![id],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .optional()?
+            .ok_or(CoreError::NotFound)?;
+        let aad = aad_meta(&hash);
+        let mut meta = Meta::decode(&self.keys.open(&meta_ct, &aad)?)?;
+        meta.secret = Some(if sensitive {
+            Sensitivity::MarkedOn
+        } else {
+            Sensitivity::MarkedOff
+        });
+        let pt = zeroize::Zeroizing::new(meta.encode());
+        conn.execute(
+            "UPDATE entry SET meta = ?1 WHERE id = ?2",
+            params![self.keys.seal(&pt, &aad)?, id],
+        )?;
+        Ok(())
+    }
+
     /// Deletes all entries, or only unpinned ones when `keep_pinned` is set.
     pub fn clear(&self, keep_pinned: bool) -> Result<()> {
         let conn = self.conn();
@@ -475,4 +582,26 @@ pub fn delete_store_files(path: String) -> Result<()> {
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn meta_without_secret_flag_is_detected_on_read() {
+        let mut old = Vec::new();
+        for field in ["P@ssw0rd!", "P@ssw0rd!", "Notes"] {
+            put_bytes(&mut old, field.as_bytes());
+        }
+        let meta = Meta::decode(&old).unwrap();
+        assert_eq!(meta.secret, None);
+        assert_eq!(meta.secret(), Sensitivity::Detected);
+
+        let mut meta = meta;
+        meta.secret = Some(Sensitivity::MarkedOff);
+        let back = Meta::decode(&meta.encode()).unwrap();
+        assert_eq!(back.secret, Some(Sensitivity::MarkedOff));
+        assert_eq!(back.source_app.as_deref(), Some("Notes"));
+    }
 }

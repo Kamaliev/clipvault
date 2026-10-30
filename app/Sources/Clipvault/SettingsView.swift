@@ -20,6 +20,8 @@ struct SettingsView: View {
             }
             Toggle("Paste selected item automatically (⌘V)", isOn: $model.autoPaste)
             Toggle("Recognize text in images for search (on-device)", isOn: $model.recognizeText)
+            Toggle("Mask passwords, tokens and keys", isOn: $model.maskSecrets)
+                .help("Shows detected secrets as ghp_••••••3xY5 in the history and preview; ⌘R in the preview reveals them. Pasting always uses the full text.")
             Picker("Menu bar icon", selection: $model.alwaysShowMenuBarIcon) {
                 Text("Only while in use").tag(false)
                 Text("Always").tag(true)
@@ -67,7 +69,7 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: 520, height: 440)
+        .frame(width: 520, height: 470)
         .onDisappear { stopRecording() }
     }
 

@@ -7,6 +7,8 @@ struct ClipPreview: Equatable {
     let image: NSImage?
     let title: String
     let subtitle: String
+    /// The text contains a secret that is currently masked; ⌘R reveals it.
+    let masked: Bool
 }
 
 @MainActor
@@ -16,11 +18,19 @@ final class HistoryViewModel: ObservableObject {
     }
     @Published private(set) var items: [ClipSummary] = []
     @Published var selection = 0 {
-        didSet { if selection != oldValue, preview != nil { loadPreview() } }
+        didSet {
+            guard selection != oldValue else { return }
+            revealedID = nil
+            if preview != nil { loadPreview() }
+        }
     }
     @Published private(set) var accessibilityGranted = true
     @Published private(set) var preview: ClipPreview?
     @Published var focusToken = UUID()
+    var maskingEnabled = true
+    /// The record whose secret is shown in full; tied to the id so a new record arriving at
+    /// the top of the list does not reveal another one.
+    private var revealedID: Int64?
 
     var onAction: ((ClipAction, Int64) -> Void)?
     var onSequence: (([Int64]) -> Void)?
@@ -34,6 +44,7 @@ final class HistoryViewModel: ObservableObject {
     func prepare(accessibilityGranted: Bool) {
         self.accessibilityGranted = accessibilityGranted
         preview = nil
+        revealedID = nil
         query = ""
         selection = 0
         reload()
@@ -94,7 +105,20 @@ final class HistoryViewModel: ObservableObject {
         reload()
     }
 
+    func toggleSensitive(index: Int? = nil) {
+        let index = index ?? selection
+        guard items.indices.contains(index) else { return }
+        do {
+            try store.setSensitive(id: items[index].id, sensitive: !items[index].sensitive)
+        } catch {
+            NSLog("clipvault: marking secret failed: \(error)")
+        }
+        revealedID = nil
+        reload()
+    }
+
     func togglePreview() {
+        revealedID = nil
         if preview != nil {
             preview = nil
         } else {
@@ -102,9 +126,18 @@ final class HistoryViewModel: ObservableObject {
         }
     }
 
+    /// Shows or hides the full text of a masked secret in the preview.
+    func toggleReveal() {
+        guard preview != nil, items.indices.contains(selection), items[selection].sensitive, maskingEnabled else { return }
+        let id = items[selection].id
+        revealedID = revealedID == id ? nil : id
+        loadPreview()
+    }
+
     func closePreview() -> Bool {
         guard preview != nil else { return false }
         preview = nil
+        revealedID = nil
         return true
     }
 
@@ -114,12 +147,22 @@ final class HistoryViewModel: ObservableObject {
         guard let reps = try? store.get(id: id) else { preview = nil; return }
         let item = items[selection]
         let image = ClipContent.image(reps)
-        let text = image == nil ? ClipContent.plainText(reps).map { String($0.prefix(200_000)) } : nil
+        var text = image == nil ? ClipContent.plainText(reps).map { String($0.prefix(200_000)) } : nil
+        let secret = item.sensitive && maskingEnabled && text != nil
+        let revealed = revealedID == id
         var title = Self.kindName(item.kind)
         if let image, let rep = image.representations.first {
             title += " — \(rep.pixelsWide) × \(rep.pixelsHigh)"
-        } else if let text {
-            title += " — \(text.count.formatted()) characters"
+        } else if let full = text {
+            title += " — \(full.count.formatted()) characters"
+        }
+        if secret {
+            if revealed {
+                title += " — secret revealed"
+            } else {
+                text = text.map { maskSecrets(text: $0, whole: true) }
+                title += " — secret masked"
+            }
         }
         var subtitle = [ByteCountFormatter.string(fromByteCount: Int64(item.size), countStyle: .file)]
         if let app = item.sourceApp { subtitle.append(app) }
@@ -127,7 +170,7 @@ final class HistoryViewModel: ObservableObject {
             .formatted(date: .abbreviated, time: .shortened))
         if item.pinned { subtitle.append("Pinned") }
         preview = ClipPreview(id: id, text: text, image: image, title: title,
-                              subtitle: subtitle.joined(separator: " · "))
+                              subtitle: subtitle.joined(separator: " · "), masked: secret && !revealed)
     }
 
     private static func kindName(_ kind: ClipKind) -> String {
@@ -187,10 +230,12 @@ struct HistoryView: View {
             HStack {
                 Text(model.preview == nil
                      ? "⏎ paste · ⇧⏎ plain · ⌘⏎ copy · ⌥⏎ sequence · ⌘P pin · space preview"
+                     : model.preview?.masked == true
+                     ? "↑↓ browse · ⌘R reveal secret · ⌘+ ⌘− ⌘0 zoom · space/esc close"
                      : "↑↓ browse · ⌘+ ⌘− ⌘0 zoom · space/esc close")
                     .lineLimit(1)
                     .truncationMode(.tail)
-                    .help("⏎ paste · ⇧⏎ paste as plain text · ⌘⏎ copy only · ⌥⏎ paste sequentially (then ⌥⇧⌘V) · ⌘P pin · space or ⌘Y preview (⌘+/⌘−/⌘0 zoom) · ⌘⌫ delete · ⌘1–9 paste n-th · ⌘, settings")
+                    .help("⏎ paste · ⇧⏎ paste as plain text · ⌘⏎ copy only · ⌥⏎ paste sequentially (then ⌥⇧⌘V) · ⌘P pin · space or ⌘Y preview (⌘+/⌘−/⌘0 zoom, ⌘R reveal a masked secret) · ⌘⌫ delete · ⌘1–9 paste n-th · ⌘, settings")
                 Spacer(minLength: 8)
                 if !model.accessibilityGranted {
                     Text("Copy only")
@@ -243,6 +288,7 @@ struct HistoryView: View {
         Button("Paste Sequentially from Here") { model.startSequence(index: index) }
         Divider()
         Button(item.pinned ? "Unpin" : "Pin") { model.togglePin(index: index) }
+        Button(item.sensitive ? "Not a Secret" : "Mark as Secret") { model.toggleSensitive(index: index) }
         Button("Preview") {
             model.selection = index
             model.togglePreview()
@@ -321,6 +367,7 @@ struct HistoryRow: View {
     }
 
     private var icon: String {
+        if item.sensitive { return "key.fill" }
         if link != nil { return "link" }
         switch item.kind {
         case .text: return "doc.plaintext"

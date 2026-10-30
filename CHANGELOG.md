@@ -6,6 +6,11 @@ the project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Passwords, tokens and keys are masked in the history and preview (`ghp_••••••3xY5`); ⌘R in the preview reveals them, pasting uses the full text. Detected: known token formats (GitHub, OpenAI, AWS, Slack, JWT, …), private keys, `password=`/`token:`-style values, passwords in URLs, `Bearer`/`Basic` credentials and records that look like a single password or token.
+- Mark as Secret / Not a Secret in the context menu, and a Settings toggle to turn masking off.
+
 ## [0.2.2] - 2026-10-30
 
 ### Fixed

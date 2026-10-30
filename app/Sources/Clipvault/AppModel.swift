@@ -20,6 +20,15 @@ final class AppModel: ObservableObject {
             monitor?.recognizeText = recognizeText
         }
     }
+    /// Show passwords, tokens and keys masked in the history and preview.
+    @Published var maskSecrets: Bool {
+        didSet {
+            UserDefaults.standard.set(maskSecrets, forKey: "maskSecrets")
+            store?.setMaskSecrets(on: maskSecrets)
+            popup?.maskSecrets = maskSecrets
+            popup?.refreshIfVisible()
+        }
+    }
     /// Show the menu bar icon all the time instead of only while Clipvault is in use.
     @Published var alwaysShowMenuBarIcon: Bool {
         didSet {
@@ -73,6 +82,7 @@ final class AppModel: ObservableObject {
         autoPaste = UserDefaults.standard.object(forKey: "autoPaste") as? Bool ?? true
         let recognize = UserDefaults.standard.object(forKey: "recognizeText") as? Bool ?? true
         recognizeText = recognize
+        maskSecrets = UserDefaults.standard.object(forKey: "maskSecrets") as? Bool ?? true
         let always = UserDefaults.standard.bool(forKey: "alwaysShowMenuBarIcon")
         alwaysShowMenuBarIcon = always
         menuBarIconVisible = always
@@ -136,6 +146,7 @@ final class AppModel: ObservableObject {
     private func storeOpened(_ store: Store, warning: String?) {
         self.store = store
         storageWarning = warning
+        store.setMaskSecrets(on: maskSecrets)
         let monitor = PasteboardMonitor(store: store, maxBytes: Self.maxEntryBytes)
         monitor.recognizeText = recognizeText
         monitor.paused = paused
@@ -150,6 +161,7 @@ final class AppModel: ObservableObject {
             self?.updateMenuBarIcon()
         }
         popup?.onOpenSettings = { [weak self] in self?.openSettings() }
+        popup?.maskSecrets = maskSecrets
         monitor.onAdded = { [weak self] in
             self?.refreshCount()
             self?.popup?.refreshIfVisible()

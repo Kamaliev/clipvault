@@ -68,6 +68,7 @@ final class PreviewController {
     private var showingImage = false
     private var textSize: CGFloat = 14
     private var shownID: Int64?
+    private var shownText: String?
 
     var isVisible: Bool { panel.isVisible }
 
@@ -145,8 +146,10 @@ final class PreviewController {
     func show(_ preview: ClipPreview, beside anchor: NSRect, on screen: NSScreen?) -> NSRect {
         titleLabel.stringValue = preview.title
         subtitleLabel.stringValue = preview.subtitle
-        let sameItem = preview.id == shownID && panel.isVisible
+        // Revealing a masked secret keeps the item but changes its text.
+        let sameItem = preview.id == shownID && preview.text == shownText && panel.isVisible
         shownID = preview.id
+        shownText = preview.text
         guard let visible = (screen ?? NSScreen.main)?.visibleFrame else { return anchor }
         let gap: CGFloat = 12
         let width = max(360, min(1200, visible.width - anchor.width - gap * 3))
@@ -170,6 +173,7 @@ final class PreviewController {
     func hide() {
         panel.orderOut(nil)
         shownID = nil
+        shownText = nil
     }
 
     /// `+1` zoom in, `-1` zoom out, `0` fit (image) or default size (text).

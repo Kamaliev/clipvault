@@ -369,3 +369,53 @@ fn migrates_v1_database_and_keeps_pin_state() {
     let s = env.open();
     assert!(s.list(None, 10).unwrap()[0].pinned);
 }
+
+#[test]
+fn secrets_are_masked_in_list_but_pasted_intact() {
+    let env = Env::new();
+    let s = env.open();
+    let token = "ghp_aB3dE5fG7hI9jK1lM3nO5pQ7rS9tU1vW3xY5";
+    let line = format!("export GITHUB_TOKEN={token}");
+    let id = s.add(text(&line)).unwrap().unwrap();
+    s.add(text("hello world")).unwrap();
+
+    let list = s.list(None, 10).unwrap();
+    assert_eq!(list[1].preview, "export GITHUB_TOKEN=ghp_••••••3xY5");
+    assert!(list[1].sensitive);
+    assert!(!list[0].sensitive);
+    assert_eq!(s.get(id).unwrap()[0].data, line.as_bytes());
+    // Still found by the secret itself, shown masked.
+    assert_eq!(s.list(Some("ghp_aB3".into()), 10).unwrap()[0].id, id);
+
+    s.set_mask_secrets(false);
+    assert_eq!(s.list(None, 10).unwrap()[1].preview, line);
+    assert!(s.list(None, 10).unwrap()[1].sensitive);
+}
+
+#[test]
+fn user_can_mark_and_unmark_secrets() {
+    let env = Env::new();
+    let s = env.open();
+    let id = s.add(text("my secret phrase is here")).unwrap().unwrap();
+    assert!(!s.list(None, 10).unwrap()[0].sensitive);
+
+    s.set_sensitive(id, true).unwrap();
+    let e = &s.list(None, 10).unwrap()[0];
+    assert!(e.sensitive);
+    assert_eq!(e.preview, "my ••••••ere");
+    drop(s);
+    // The mark is stored (encrypted) with the entry.
+    let s = env.open();
+    assert!(s.list(None, 10).unwrap()[0].sensitive);
+
+    let pw = s.add(text("P@ssw0rd!")).unwrap().unwrap();
+    assert!(s.list(None, 10).unwrap()[0].sensitive);
+    s.set_sensitive(pw, false).unwrap();
+    let e = &s.list(None, 10).unwrap()[0];
+    assert!(!e.sensitive);
+    assert_eq!(e.preview, "P@ssw0rd!");
+    assert!(matches!(
+        s.set_sensitive(999, true),
+        Err(CoreError::NotFound)
+    ));
+}
