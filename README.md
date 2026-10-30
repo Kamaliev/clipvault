@@ -31,6 +31,10 @@ To build from source, see [Development](#development).
 | Accessibility | Send <kbd>⌘V</kbd> to the frontmost application (auto-paste) | The record is copied to the pasteboard; paste manually |
 | Keychain | Store the encryption key | History is kept in memory only until the next launch |
 
+Releases are signed ad hoc, so after each install or update macOS asks once whether Clipvault may use
+its Keychain item. Choose **Always Allow**; with **Allow** the question returns on every launch.
+The hotkey works while the question is shown, and the history opens as soon as it is answered.
+
 ## Features
 
 - Global hotkey, <kbd>⇧⌘V</kbd> by default, configurable in Settings.

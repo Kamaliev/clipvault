@@ -11,6 +11,11 @@ the project uses [Semantic Versioning](https://semver.org/).
 - The menu bar icon is shown only while Clipvault is in use (popup, Settings, paste sequence); Settings › Menu bar icon › Always restores the old behavior.
 - Settings open with ⌘, in the popup, by launching Clipvault again, and on the first launch.
 
+### Fixed
+
+- Launch no longer blocks while macOS asks for Keychain access: the hotkey and menu work at once, and a popup requested meanwhile opens as soon as the history is unlocked.
+- The Settings window opened collapsed to its title bar.
+
 ## [0.2.0] - 2026-10-30
 
 ### Added

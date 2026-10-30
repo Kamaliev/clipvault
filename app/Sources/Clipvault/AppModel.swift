@@ -5,11 +5,11 @@ import SwiftUI
 final class AppModel: ObservableObject {
     static let shared = AppModel()
 
-    static let ttlSeconds: UInt64 = 24 * 3600
-    static let maxEntryBytes = 20 * 1024 * 1024
+    nonisolated static let ttlSeconds: UInt64 = 24 * 3600
+    nonisolated static let maxEntryBytes = 20 * 1024 * 1024
 
     @Published var paused = false {
-        didSet { monitor.paused = paused }
+        didSet { monitor?.paused = paused }
     }
     @Published var autoPaste: Bool {
         didSet { UserDefaults.standard.set(autoPaste, forKey: "autoPaste") }
@@ -17,7 +17,7 @@ final class AppModel: ObservableObject {
     @Published var recognizeText: Bool {
         didSet {
             UserDefaults.standard.set(recognizeText, forKey: "recognizeText")
-            monitor.recognizeText = recognizeText
+            monitor?.recognizeText = recognizeText
         }
     }
     /// Show the menu bar icon all the time instead of only while Clipvault is in use.
@@ -52,8 +52,11 @@ final class AppModel: ObservableObject {
     @Published private(set) var storageWarning: String?
     @Published private(set) var entryCount: UInt32 = 0
 
-    let store: Store
-    private let monitor: PasteboardMonitor
+    /// Opened in the background at launch: reading the key may wait on a Keychain prompt.
+    private(set) var store: Store?
+    private var monitor: PasteboardMonitor?
+    /// The popup was requested before the store was ready.
+    private var popupRequested = false
     private var hotKeyManager: GlobalHotKey?
     private var nextHotKey: GlobalHotKey?
     private var sequence: [Int64] = []
@@ -66,14 +69,9 @@ final class AppModel: ObservableObject {
     private var hideIconWork: DispatchWorkItem?
 
     private init() {
-        let (store, warning) = Self.openStore()
-        self.store = store
-        storageWarning = warning
-        monitor = PasteboardMonitor(store: store, maxBytes: Self.maxEntryBytes)
         autoPaste = UserDefaults.standard.object(forKey: "autoPaste") as? Bool ?? true
         let recognize = UserDefaults.standard.object(forKey: "recognizeText") as? Bool ?? true
         recognizeText = recognize
-        monitor.recognizeText = recognize
         let always = UserDefaults.standard.bool(forKey: "alwaysShowMenuBarIcon")
         alwaysShowMenuBarIcon = always
         menuBarIconVisible = always
@@ -88,16 +86,8 @@ final class AppModel: ObservableObject {
     func start() {
         guard !started else { return }
         started = true
-        popup = PopupController(
-            store: store,
-            onAction: { [weak self] action, id, app in self?.perform(action, id: id, into: app) },
-            onSequence: { [weak self] ids, app in self?.startSequence(ids, into: app) }
-        )
-        popup?.onVisibilityChange = { [weak self] visible in
-            self?.popupVisible = visible
-            self?.updateMenuBarIcon()
-        }
-        popup?.onOpenSettings = { [weak self] in self?.openSettings() }
+        // Everything that does not need the store is ready immediately, so the hotkey and the
+        // menu respond even while macOS asks for Keychain access.
         // Keep the icon while its menu is open, even if the popup closed meanwhile.
         for (name, tracking) in [(NSMenu.didBeginTrackingNotification, true), (NSMenu.didEndTrackingNotification, false)] {
             NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
@@ -107,11 +97,6 @@ final class AppModel: ObservableObject {
                 }
             }
         }
-        monitor.onAdded = { [weak self] in
-            self?.refreshCount()
-            self?.popup?.refreshIfVisible()
-        }
-        monitor.start()
         hotKeyManager = GlobalHotKey(id: 1) { [weak self] in self?.togglePopup() }
         nextHotKey = GlobalHotKey(id: 2) { [weak self] in self?.pasteNext(into: nil) }
         registerHotKey()
@@ -122,6 +107,40 @@ final class AppModel: ObservableObject {
             Task { @MainActor [weak self] in self?.togglePopup() }
         }
 
+        Task.detached(priority: .userInitiated) {
+            let (store, warning) = Self.openStore()
+            await MainActor.run { AppModel.shared.storeOpened(store, warning: warning) }
+        }
+        // The icon is hidden by default, so show something on the very first launch.
+        if !UserDefaults.standard.bool(forKey: "didShowWelcome") {
+            UserDefaults.standard.set(true, forKey: "didShowWelcome")
+            openSettings()
+        }
+    }
+
+    private func storeOpened(_ store: Store, warning: String?) {
+        self.store = store
+        storageWarning = warning
+        let monitor = PasteboardMonitor(store: store, maxBytes: Self.maxEntryBytes)
+        monitor.recognizeText = recognizeText
+        monitor.paused = paused
+        self.monitor = monitor
+        popup = PopupController(
+            store: store,
+            onAction: { [weak self] action, id, app in self?.perform(action, id: id, into: app) },
+            onSequence: { [weak self] ids, app in self?.startSequence(ids, into: app) }
+        )
+        popup?.onVisibilityChange = { [weak self] visible in
+            self?.popupVisible = visible
+            self?.updateMenuBarIcon()
+        }
+        popup?.onOpenSettings = { [weak self] in self?.openSettings() }
+        monitor.onAdded = { [weak self] in
+            self?.refreshCount()
+            self?.popup?.refreshIfVisible()
+        }
+        monitor.start()
+
         let timer = Timer(timeInterval: 300, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in self?.purge() }
         }
@@ -129,10 +148,9 @@ final class AppModel: ObservableObject {
         RunLoop.main.add(timer, forMode: .common)
         purgeTimer = timer
         purge()
-        // The icon is hidden by default, so show something on the very first launch.
-        if !UserDefaults.standard.bool(forKey: "didShowWelcome") {
-            UserDefaults.standard.set(true, forKey: "didShowWelcome")
-            openSettings()
+        if popupRequested {
+            popupRequested = false
+            togglePopup()
         }
     }
 
@@ -156,12 +174,16 @@ final class AppModel: ObservableObject {
 
     func togglePopup() {
         refreshAccessibility()
-        popup?.toggle()
+        guard let popup else {
+            popupRequested.toggle()
+            return
+        }
+        popup.toggle()
     }
 
     /// Clears history; pinned items are kept unless `includingPinned` is set.
     func clearHistory(includingPinned: Bool = false) {
-        try? store.clear(keepPinned: !includingPinned)
+        try? store?.clear(keepPinned: !includingPinned)
         refreshCount()
         popup?.refreshIfVisible()
     }
@@ -169,9 +191,9 @@ final class AppModel: ObservableObject {
     func pasteNext(into app: NSRunningApplication?) {
         while let id = sequence.first {
             sequence.removeFirst()
-            guard let reps = try? store.get(id: id) else { continue }
+            guard let reps = try? store?.get(id: id) else { continue }
             Paster.write(reps)
-            monitor.skipCurrent()
+            monitor?.skipCurrent()
             sendPaste(into: app)
             break
         }
@@ -244,6 +266,7 @@ final class AppModel: ObservableObject {
     }
 
     private func perform(_ action: ClipAction, id: Int64, into app: NSRunningApplication?) {
+        guard let store else { return }
         let reps: [ClipRep]
         do {
             reps = try store.get(id: id)
@@ -256,7 +279,7 @@ final class AppModel: ObservableObject {
         } else {
             Paster.write(reps)
         }
-        monitor.skipCurrent()
+        monitor?.skipCurrent()
         try? store.touch(id: id)
         if action != .copy { sendPaste(into: app) }
     }
@@ -274,12 +297,12 @@ final class AppModel: ObservableObject {
     }
 
     private func purge() {
-        _ = try? store.purgeExpired()
+        _ = try? store?.purgeExpired()
         refreshCount()
     }
 
     private func refreshCount() {
-        entryCount = (try? store.count()) ?? 0
+        entryCount = (try? store?.count()) ?? 0
     }
 
     private func registerHotKey() {
@@ -293,13 +316,13 @@ final class AppModel: ObservableObject {
         }
     }
 
-    private static func databasePath() throws -> String {
+    nonisolated private static func databasePath() throws -> String {
         let base = try FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
         return base.appendingPathComponent("Clipvault", isDirectory: true).appendingPathComponent("history.db").path
     }
 
     /// Opens the encrypted on-disk store. Falls back to an in-memory store if the Keychain is unavailable.
-    private static func openStore() -> (Store, String?) {
+    nonisolated private static func openStore() -> (Store, String?) {
         let ttl = ttlSeconds, max = UInt64(maxEntryBytes)
         do {
             let key = try KeychainKey.loadOrCreate()
