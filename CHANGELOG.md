@@ -6,6 +6,12 @@ the project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- The history popup is now truly translucent: Liquid Glass on macOS 26, behind-window vibrancy on macOS 14–15.
+- Glass-style highlight for the selected row.
+- CI and release builds run on `macos-26` (macOS 26 SDK).
+
 ## [0.1.1] - 2026-10-30
 
 ### Added

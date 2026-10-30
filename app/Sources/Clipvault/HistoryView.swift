@@ -83,7 +83,7 @@ struct HistoryView: View {
             .padding(.top, 30)
             .padding(.bottom, 10)
 
-            Divider()
+            Divider().opacity(0.6)
 
             if model.items.isEmpty {
                 Spacer()
@@ -111,7 +111,7 @@ struct HistoryView: View {
                 }
             }
 
-            Divider()
+            Divider().opacity(0.6)
             HStack {
                 Text("⏎ paste · ⌘1–9 select · ⌘⌫ delete · esc")
                     .lineLimit(1)
@@ -128,7 +128,6 @@ struct HistoryView: View {
             .padding(.horizontal, 12)
             .padding(.vertical, 6)
         }
-        .background(.regularMaterial)
         .onChange(of: model.focusToken) { _, _ in searchFocused = true }
         .onAppear { searchFocused = true }
     }
@@ -163,7 +162,7 @@ struct HistoryRow: View {
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 5)
-        .background(RoundedRectangle(cornerRadius: 6).fill(selected ? Color.accentColor.opacity(0.25) : .clear))
+        .modifier(SelectionBackground(selected: selected))
     }
 
     private var icon: String {
@@ -194,4 +193,34 @@ struct HistoryRow: View {
         f.unitsStyle = .short
         return f
     }()
+}
+
+/// Glass-style highlight for the selected row.
+private struct SelectionBackground: ViewModifier {
+    let selected: Bool
+
+    func body(content: Content) -> some View {
+        let shape = RoundedRectangle(cornerRadius: 8, style: .continuous)
+        #if compiler(>=6.2)
+        if #available(macOS 26, *) {
+            if selected {
+                content.glassEffect(.regular.tint(.accentColor.opacity(0.35)), in: shape)
+            } else {
+                content
+            }
+        } else {
+            fallback(content, shape)
+        }
+        #else
+        fallback(content, shape)
+        #endif
+    }
+
+    private func fallback(_ content: Content, _ shape: RoundedRectangle) -> some View {
+        content.background(
+            shape
+                .fill(selected ? Color.accentColor.opacity(0.3) : .clear)
+                .overlay(shape.strokeBorder(selected ? Color.white.opacity(0.18) : .clear, lineWidth: 0.5))
+        )
+    }
 }

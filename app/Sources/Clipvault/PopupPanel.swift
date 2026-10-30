@@ -23,10 +23,46 @@ final class PopupPanel: NSPanel {
         standardWindowButton(.miniaturizeButton)?.isHidden = true
         standardWindowButton(.zoomButton)?.isHidden = true
         minSize = NSSize(width: 380, height: 260)
+        isOpaque = false
+        backgroundColor = .clear
+        hasShadow = true
     }
 
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { false }
+}
+
+/// Translucent backdrop showing what is behind the window: Liquid Glass on macOS 26+,
+/// classic behind-window vibrancy on older systems.
+@MainActor
+func makeGlassContainer(hosting content: NSView, cornerRadius: CGFloat = 16) -> NSView {
+    #if compiler(>=6.2)
+    if #available(macOS 26, *) {
+        let glass = NSGlassEffectView()
+        glass.style = .regular
+        glass.cornerRadius = cornerRadius
+        glass.contentView = content
+        return glass
+    }
+    #endif
+    let effect = NSVisualEffectView()
+    effect.material = .menu
+    effect.blendingMode = .behindWindow
+    // The panel never activates the app, so force the active look instead of the grey inactive one.
+    effect.state = .active
+    effect.wantsLayer = true
+    effect.layer?.cornerRadius = cornerRadius
+    effect.layer?.cornerCurve = .continuous
+    effect.layer?.masksToBounds = true
+    content.translatesAutoresizingMaskIntoConstraints = false
+    effect.addSubview(content)
+    NSLayoutConstraint.activate([
+        content.leadingAnchor.constraint(equalTo: effect.leadingAnchor),
+        content.trailingAnchor.constraint(equalTo: effect.trailingAnchor),
+        content.topAnchor.constraint(equalTo: effect.topAnchor),
+        content.bottomAnchor.constraint(equalTo: effect.bottomAnchor),
+    ])
+    return effect
 }
 
 @MainActor
@@ -43,7 +79,10 @@ final class PopupController: NSObject, NSWindowDelegate {
         super.init()
         viewModel.onChoose = { [weak self] id in self?.choose(id) }
         panel.delegate = self
-        panel.contentView = NSHostingView(rootView: HistoryView(model: viewModel))
+        let hosting = NSHostingView(rootView: HistoryView(model: viewModel))
+        hosting.wantsLayer = true
+        hosting.layer?.backgroundColor = .clear
+        panel.contentView = makeGlassContainer(hosting: hosting)
     }
 
     var isVisible: Bool { panel.isVisible }
@@ -60,6 +99,7 @@ final class PopupController: NSObject, NSWindowDelegate {
         viewModel.prepare(accessibilityGranted: Paster.isTrusted)
         position()
         panel.makeKeyAndOrderFront(nil)
+        panel.invalidateShadow()
         installKeyMonitor()
     }
 
@@ -70,6 +110,10 @@ final class PopupController: NSObject, NSWindowDelegate {
 
     func refreshIfVisible() {
         if isVisible { viewModel.reload() }
+    }
+
+    func windowDidResize(_ notification: Notification) {
+        panel.invalidateShadow()
     }
 
     func windowDidResignKey(_ notification: Notification) {
