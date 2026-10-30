@@ -28,6 +28,13 @@ struct MenuContent: View {
 
     var body: some View {
         Button("Show History (\(model.hotKey.display))") { model.togglePopup() }
+        if model.sequenceRemaining > 0 {
+            Button("Paste Next (\(HotKeySpec.pasteNext.display)) — \(model.sequenceRemaining) left") {
+                model.pasteNext(into: nil)
+            }
+            Button("Stop Paste Sequence") { model.stopSequence() }
+            if let error = model.sequenceError { Text(error) }
+        }
         Divider()
         Toggle("Pause Recording", isOn: $model.paused)
         Toggle("Auto-Paste", isOn: $model.autoPaste)
@@ -39,7 +46,7 @@ struct MenuContent: View {
             Text(warning)
         }
         Divider()
-        Button("Clear History") { model.clearHistory() }
+        Button("Clear History (Keep Pinned)") { model.clearHistory() }
         Button("Settings…") { model.openSettings() }.keyboardShortcut(",")
         Divider()
         Button("Quit") { NSApp.terminate(nil) }.keyboardShortcut("q")

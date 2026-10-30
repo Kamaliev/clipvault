@@ -14,6 +14,15 @@ final class AppModel: ObservableObject {
     @Published var autoPaste: Bool {
         didSet { UserDefaults.standard.set(autoPaste, forKey: "autoPaste") }
     }
+    @Published var recognizeText: Bool {
+        didSet {
+            UserDefaults.standard.set(recognizeText, forKey: "recognizeText")
+            monitor.recognizeText = recognizeText
+        }
+    }
+    /// Items left in the active paste sequence (pasted one by one with ⌥⇧⌘V).
+    @Published private(set) var sequenceRemaining = 0
+    @Published private(set) var sequenceError: String?
     @Published var hotKey: HotKeySpec {
         didSet { saveHotKey(); registerHotKey() }
     }
@@ -38,6 +47,8 @@ final class AppModel: ObservableObject {
     let store: Store
     private let monitor: PasteboardMonitor
     private var hotKeyManager: GlobalHotKey?
+    private var nextHotKey: GlobalHotKey?
+    private var sequence: [Int64] = []
     private var popup: PopupController?
     private var settingsWindow: NSWindow?
     private var purgeTimer: Timer?
@@ -49,6 +60,9 @@ final class AppModel: ObservableObject {
         storageWarning = warning
         monitor = PasteboardMonitor(store: store, maxBytes: Self.maxEntryBytes)
         autoPaste = UserDefaults.standard.object(forKey: "autoPaste") as? Bool ?? true
+        let recognize = UserDefaults.standard.object(forKey: "recognizeText") as? Bool ?? true
+        recognizeText = recognize
+        monitor.recognizeText = recognize
         if let data = UserDefaults.standard.data(forKey: "hotKey"),
            let spec = try? JSONDecoder().decode(HotKeySpec.self, from: data) {
             hotKey = spec
@@ -60,13 +74,18 @@ final class AppModel: ObservableObject {
     func start() {
         guard !started else { return }
         started = true
-        popup = PopupController(store: store) { [weak self] id, app in self?.paste(id: id, into: app) }
+        popup = PopupController(
+            store: store,
+            onAction: { [weak self] action, id, app in self?.perform(action, id: id, into: app) },
+            onSequence: { [weak self] ids, app in self?.startSequence(ids, into: app) }
+        )
         monitor.onAdded = { [weak self] in
             self?.refreshCount()
             self?.popup?.refreshIfVisible()
         }
         monitor.start()
-        hotKeyManager = GlobalHotKey { [weak self] in self?.togglePopup() }
+        hotKeyManager = GlobalHotKey(id: 1) { [weak self] in self?.togglePopup() }
+        nextHotKey = GlobalHotKey(id: 2) { [weak self] in self?.pasteNext(into: nil) }
         registerHotKey()
         // Lets scripts/Shortcuts open the popup without the hotkey.
         DistributedNotificationCenter.default().addObserver(
@@ -89,10 +108,45 @@ final class AppModel: ObservableObject {
         popup?.toggle()
     }
 
-    func clearHistory() {
-        try? store.clear()
+    /// Clears history; pinned items are kept unless `includingPinned` is set.
+    func clearHistory(includingPinned: Bool = false) {
+        try? store.clear(keepPinned: !includingPinned)
         refreshCount()
         popup?.refreshIfVisible()
+    }
+
+    func pasteNext(into app: NSRunningApplication?) {
+        while let id = sequence.first {
+            sequence.removeFirst()
+            guard let reps = try? store.get(id: id) else { continue }
+            Paster.write(reps)
+            monitor.skipCurrent()
+            sendPaste(into: app)
+            break
+        }
+        updateSequence()
+    }
+
+    func stopSequence() {
+        sequence.removeAll()
+        updateSequence()
+    }
+
+    private func startSequence(_ ids: [Int64], into app: NSRunningApplication?) {
+        sequence = ids
+        pasteNext(into: app)
+    }
+
+    private func updateSequence() {
+        sequenceRemaining = sequence.count
+        if sequence.isEmpty {
+            nextHotKey?.unregister()
+            sequenceError = nil
+        } else if nextHotKey?.register(.pasteNext) == false {
+            sequenceError = "\(HotKeySpec.pasteNext.display) is in use; use the menu to paste next"
+        } else {
+            sequenceError = nil
+        }
     }
 
     func refreshAccessibility() {
@@ -129,7 +183,7 @@ final class AppModel: ObservableObject {
         settingsWindow?.makeKeyAndOrderFront(nil)
     }
 
-    private func paste(id: Int64, into app: NSRunningApplication?) {
+    private func perform(_ action: ClipAction, id: Int64, into app: NSRunningApplication?) {
         let reps: [ClipRep]
         do {
             reps = try store.get(id: id)
@@ -137,15 +191,23 @@ final class AppModel: ObservableObject {
             NSLog("clipvault: get failed: \(error)")
             return
         }
-        Paster.write(reps)
+        if action == .pastePlain, let text = ClipContent.plainText(reps) {
+            Paster.writePlain(text)
+        } else {
+            Paster.write(reps)
+        }
         monitor.skipCurrent()
         try? store.touch(id: id)
+        if action != .copy { sendPaste(into: app) }
+    }
 
+    /// Sends ⌘V to `app` (or the frontmost app when `nil`) if auto-paste is enabled and allowed.
+    private func sendPaste(into app: NSRunningApplication?) {
         refreshAccessibility()
         guard autoPaste, accessibilityGranted else { return }
         var delay = 0.05
-        if NSApp.isActive || NSWorkspace.shared.frontmostApplication != app {
-            app?.activate()
+        if let app, NSApp.isActive || NSWorkspace.shared.frontmostApplication != app {
+            app.activate()
             delay = 0.2
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + delay) { Paster.sendPasteKeystroke() }

@@ -1,6 +1,7 @@
 import AppKit
 import ImageIO
 import UniformTypeIdentifiers
+import Vision
 
 /// Watches NSPasteboard.changeCount (a cheap call) and reads data only when it changes.
 /// Polling is coalesced via timer tolerance and suspended while the system sleeps.
@@ -33,6 +34,8 @@ final class PasteboardMonitor {
     private var observers: [NSObjectProtocol] = []
 
     var paused = false
+    /// Recognize text in copied images (on-device Vision) so they can be found by search.
+    var recognizeText = true
     var onAdded: (() -> Void)?
 
     init(store: Store, maxBytes: Int) {
@@ -106,10 +109,13 @@ final class PasteboardMonitor {
         let sourceApp = NSWorkspace.shared.frontmostApplication?.localizedName
         let imageOnly = !reps.contains { Self.textTypes.contains($0.uti) || $0.uti == Self.fileURLType }
         let store = self.store
+        let recognize = recognizeText
         queue.async { [weak self] in
-            let thumb = imageOnly ? reps.first { Self.imageTypes.contains($0.uti) }.flatMap { Self.thumbnail($0.data) } : nil
+            let image = imageOnly ? reps.first { Self.imageTypes.contains($0.uti) } : nil
+            let thumb = image.flatMap { Self.thumbnail($0.data) }
+            let ocr = recognize ? image.flatMap { Self.recognizeText($0.data) } : nil
             do {
-                if try store.add(clip: NewClip(reps: reps, sourceApp: sourceApp, thumbnail: thumb)) != nil {
+                if try store.add(clip: NewClip(reps: reps, sourceApp: sourceApp, thumbnail: thumb, ocrText: ocr)) != nil {
                     DispatchQueue.main.async { self?.onAdded?() }
                 }
             } catch {
@@ -125,6 +131,20 @@ final class PasteboardMonitor {
         }
         if type == "public.tiff" && types.contains("public.png") { return false }
         return textTypes.contains(type) || imageTypes.contains(type)
+    }
+
+    static func recognizeText(_ data: Data) -> String? {
+        let request = VNRecognizeTextRequest()
+        request.recognitionLevel = .accurate
+        request.usesLanguageCorrection = true
+        request.automaticallyDetectsLanguage = true
+        do {
+            try VNImageRequestHandler(data: data, options: [:]).perform([request])
+        } catch {
+            return nil
+        }
+        let lines = (request.results ?? []).compactMap { $0.topCandidates(1).first?.string }
+        return lines.isEmpty ? nil : lines.joined(separator: "\n")
     }
 
     static func thumbnail(_ data: Data, maxPixels: Int = 160) -> Data? {

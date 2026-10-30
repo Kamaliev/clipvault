@@ -64,7 +64,7 @@ pub fn matches(query: &str, haystack: &str, source_app: Option<&str>) -> bool {
         .all(|w| hay.contains(w) || app.contains(w))
 }
 
-fn truncate_chars(s: &str, n: usize) -> String {
+pub fn truncate_chars(s: &str, n: usize) -> String {
     match s.char_indices().nth(n) {
         Some((i, _)) => s[..i].to_string(),
         None => s.to_string(),

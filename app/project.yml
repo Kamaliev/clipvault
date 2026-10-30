@@ -29,3 +29,4 @@ targets:
       - sdk: Carbon.framework
       - sdk: Security.framework
       - sdk: ServiceManagement.framework
+      - sdk: Vision.framework

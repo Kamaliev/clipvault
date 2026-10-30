@@ -57,6 +57,7 @@ fn text(s: &str) -> NewClip {
         }],
         source_app: Some("Notes".into()),
         thumbnail: None,
+        ocr_text: None,
     }
 }
 
@@ -79,6 +80,7 @@ fn add_list_get_roundtrip() {
         ],
         source_app: Some("TextEdit".into()),
         thumbnail: None,
+        ocr_text: None,
     };
     let id = s.add(clip.clone()).unwrap().unwrap();
     env.advance(1);
@@ -126,7 +128,8 @@ fn skips_empty_and_oversized() {
         s.add(NewClip {
             reps: vec![],
             source_app: None,
-            thumbnail: None
+            thumbnail: None,
+            ocr_text: None,
         })
         .unwrap(),
         None
@@ -177,6 +180,7 @@ fn image_thumbnail_delete_clear_touch() {
             }],
             source_app: None,
             thumbnail: Some(vec![9, 9]),
+            ocr_text: None,
         })
         .unwrap()
         .unwrap();
@@ -193,7 +197,7 @@ fn image_thumbnail_delete_clear_touch() {
     assert_eq!(s.list(None, 10).unwrap()[0].id, img);
     s.delete(img).unwrap();
     assert_eq!(s.count().unwrap(), 1);
-    s.clear().unwrap();
+    s.clear(false).unwrap();
     assert_eq!(s.count().unwrap(), 0);
 }
 
@@ -239,6 +243,7 @@ fn multiple_file_items_roundtrip() {
             reps: reps.clone(),
             source_app: Some("Finder".into()),
             thumbnail: None,
+            ocr_text: None,
         })
         .unwrap()
         .unwrap();
@@ -259,4 +264,108 @@ fn in_memory_store_and_private_file_permissions() {
     drop(env.open());
     let mode = std::fs::metadata(&env.path).unwrap().permissions().mode() & 0o777;
     assert_eq!(mode, 0o600);
+}
+
+fn image(data: &[u8], ocr: Option<&str>) -> NewClip {
+    NewClip {
+        reps: vec![ClipRep {
+            item: 0,
+            uti: "public.png".into(),
+            data: data.to_vec(),
+        }],
+        source_app: None,
+        thumbnail: None,
+        ocr_text: ocr.map(Into::into),
+    }
+}
+
+#[test]
+fn pinned_entries_survive_ttl_and_are_listed_first() {
+    let env = Env::new();
+    let s = env.open();
+    let a = s.add(text("alpha")).unwrap().unwrap();
+    env.advance(1);
+    let b = s.add(text("beta")).unwrap().unwrap();
+    s.set_pinned(a, true).unwrap();
+
+    let list = s.list(None, 10).unwrap();
+    assert_eq!(list.iter().map(|c| c.id).collect::<Vec<_>>(), [a, b]);
+    assert!(list[0].pinned && !list[1].pinned);
+
+    env.advance(DAY as i64 + 10);
+    assert_eq!(s.purge_expired().unwrap(), 1);
+    assert_eq!(s.count().unwrap(), 1);
+    assert_eq!(s.get(a).unwrap()[0].data, b"alpha");
+    assert!(matches!(s.get(b), Err(CoreError::NotFound)));
+
+    // Unpinning restarts the lifetime instead of dropping the entry at once.
+    s.set_pinned(a, false).unwrap();
+    assert_eq!(s.purge_expired().unwrap(), 0);
+    assert!(!s.list(None, 10).unwrap()[0].pinned);
+    env.advance(DAY as i64 + 1);
+    assert_eq!(s.purge_expired().unwrap(), 1);
+    assert!(matches!(s.set_pinned(a, true), Err(CoreError::NotFound)));
+}
+
+#[test]
+fn clear_can_keep_pinned() {
+    let env = Env::new();
+    let s = env.open();
+    let a = s.add(text("keep")).unwrap().unwrap();
+    s.add(text("drop")).unwrap().unwrap();
+    s.set_pinned(a, true).unwrap();
+    s.clear(true).unwrap();
+    assert_eq!(
+        s.list(None, 10)
+            .unwrap()
+            .iter()
+            .map(|c| c.id)
+            .collect::<Vec<_>>(),
+        [a]
+    );
+    s.clear(false).unwrap();
+    assert_eq!(s.count().unwrap(), 0);
+}
+
+#[test]
+fn image_ocr_text_is_searchable_and_encrypted() {
+    let env = Env::new();
+    let s = env.open();
+    let id = s
+        .add(image(&[1, 2, 3], Some("  Invoice 4711 total  ")))
+        .unwrap()
+        .unwrap();
+    s.add(image(&[4, 5, 6], None)).unwrap().unwrap();
+    let hits = s.list(Some("invoice".into()), 10).unwrap();
+    assert_eq!(hits.len(), 1);
+    assert_eq!(hits[0].id, id);
+    assert_eq!(hits[0].preview, "Invoice 4711 total");
+    assert_eq!(s.list(None, 10).unwrap().len(), 2);
+    drop(s);
+    let raw = std::fs::read(&env.path).unwrap();
+    assert!(!raw.windows(7).any(|w| w == b"Invoice"));
+}
+
+#[test]
+fn migrates_v1_database_and_keeps_pin_state() {
+    let env = Env::new();
+    std::fs::create_dir_all(std::path::Path::new(&env.path).parent().unwrap()).unwrap();
+    {
+        let conn = rusqlite::Connection::open(&env.path).unwrap();
+        conn.execute_batch(
+            "CREATE TABLE kv (key TEXT PRIMARY KEY, value BLOB NOT NULL);
+             CREATE TABLE entry (
+                 id INTEGER PRIMARY KEY AUTOINCREMENT, hash BLOB NOT NULL UNIQUE,
+                 kind INTEGER NOT NULL, created_at INTEGER NOT NULL, size INTEGER NOT NULL,
+                 meta BLOB NOT NULL, thumb BLOB);
+             PRAGMA user_version = 1;",
+        )
+        .unwrap();
+    }
+    let s = env.open();
+    let id = s.add(text("old")).unwrap().unwrap();
+    s.set_pinned(id, true).unwrap();
+    drop(s);
+    let s = env.open();
+    assert!(s.list(None, 10).unwrap()[0].pinned);
 }

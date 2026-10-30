@@ -1,17 +1,27 @@
 import AppKit
 import SwiftUI
 
+struct ClipPreview: Equatable {
+    let id: Int64
+    let text: String?
+    let image: NSImage?
+}
+
 @MainActor
 final class HistoryViewModel: ObservableObject {
     @Published var query = "" {
         didSet { if query != oldValue { selection = 0; reload() } }
     }
     @Published private(set) var items: [ClipSummary] = []
-    @Published var selection = 0
+    @Published var selection = 0 {
+        didSet { if selection != oldValue, preview != nil { loadPreview() } }
+    }
     @Published private(set) var accessibilityGranted = true
+    @Published private(set) var preview: ClipPreview?
     @Published var focusToken = UUID()
 
-    var onChoose: ((Int64) -> Void)?
+    var onAction: ((ClipAction, Int64) -> Void)?
+    var onSequence: (([Int64]) -> Void)?
     private let store: Store
     private let thumbnails = NSCache<NSNumber, NSImage>()
 
@@ -21,6 +31,7 @@ final class HistoryViewModel: ObservableObject {
 
     func prepare(accessibilityGranted: Bool) {
         self.accessibilityGranted = accessibilityGranted
+        preview = nil
         query = ""
         selection = 0
         reload()
@@ -36,6 +47,7 @@ final class HistoryViewModel: ObservableObject {
             items = []
         }
         selection = min(selection, max(items.count - 1, 0))
+        if preview != nil { loadPreview() }
     }
 
     func move(_ delta: Int) {
@@ -43,17 +55,64 @@ final class HistoryViewModel: ObservableObject {
         selection = min(max(selection + delta, 0), items.count - 1)
     }
 
-    func choose(index: Int) {
+    func choose(index: Int) { perform(.paste, index: index) }
+
+    func perform(_ action: ClipAction, index: Int? = nil) {
+        let index = index ?? selection
         guard items.indices.contains(index) else { return }
-        onChoose?(items[index].id)
+        onAction?(action, items[index].id)
     }
 
-    func chooseSelected() { choose(index: selection) }
+    /// Pastes the item and then, on each "Paste Next" hotkey press, the next newer one.
+    func startSequence(index: Int? = nil) {
+        let index = index ?? selection
+        guard items.indices.contains(index) else { return }
+        var ids = [items[index].id]
+        for item in items[..<index].reversed() where !item.pinned { ids.append(item.id) }
+        onSequence?(ids)
+    }
 
-    func deleteSelected() {
-        guard items.indices.contains(selection) else { return }
-        try? store.delete(id: items[selection].id)
+    func togglePin(index: Int? = nil) {
+        let index = index ?? selection
+        guard items.indices.contains(index) else { return }
+        let item = items[index]
+        do {
+            try store.setPinned(id: item.id, pinned: !item.pinned)
+        } catch {
+            NSLog("clipvault: pin failed: \(error)")
+        }
         reload()
+        if let moved = items.firstIndex(where: { $0.id == item.id }) { selection = moved }
+    }
+
+    func delete(index: Int? = nil) {
+        let index = index ?? selection
+        guard items.indices.contains(index) else { return }
+        try? store.delete(id: items[index].id)
+        reload()
+    }
+
+    func togglePreview() {
+        if preview != nil {
+            preview = nil
+        } else {
+            loadPreview()
+        }
+    }
+
+    func closePreview() -> Bool {
+        guard preview != nil else { return false }
+        preview = nil
+        return true
+    }
+
+    private func loadPreview() {
+        guard items.indices.contains(selection) else { preview = nil; return }
+        let id = items[selection].id
+        guard let reps = try? store.get(id: id) else { preview = nil; return }
+        let image = ClipContent.image(reps)
+        let text = image == nil ? ClipContent.plainText(reps).map { String($0.prefix(200_000)) } : nil
+        preview = ClipPreview(id: id, text: text, image: image)
     }
 
     func thumbnail(for item: ClipSummary) -> NSImage? {
@@ -79,57 +138,129 @@ struct HistoryView: View {
                     .font(.system(size: 16))
                     .focused($searchFocused)
             }
-            .padding(.horizontal, 14)
+            .padding(.horizontal, 16)
             .padding(.top, 30)
             .padding(.bottom, 10)
 
             Divider().opacity(0.6)
 
-            if model.items.isEmpty {
+            if let preview = model.preview {
+                PreviewPane(preview: preview)
+            } else if model.items.isEmpty {
                 Spacer()
                 Text(model.query.isEmpty ? "History is empty" : "No results")
                     .foregroundStyle(.secondary)
                 Spacer()
             } else {
-                ScrollViewReader { proxy in
-                    ScrollView {
-                        LazyVStack(spacing: 2) {
-                            ForEach(Array(model.items.enumerated()), id: \.element.id) { index, item in
-                                HistoryRow(item: item, index: index, selected: index == model.selection,
-                                           thumbnail: model.thumbnail(for: item))
-                                    .id(item.id)
-                                    .contentShape(Rectangle())
-                                    .onTapGesture(count: 2) { model.choose(index: index) }
-                                    .onTapGesture { model.selection = index }
-                            }
-                        }
-                        .padding(6)
-                    }
-                    .onChange(of: model.selection) { _, new in
-                        if model.items.indices.contains(new) { proxy.scrollTo(model.items[new].id) }
-                    }
-                }
+                list
             }
 
             Divider().opacity(0.6)
             HStack {
-                Text("⏎ paste · ⌘1–9 select · ⌘⌫ delete · esc")
+                Text(model.preview == nil
+                     ? "⏎ paste · ⇧⏎ plain · ⌘⏎ copy · ⌥⏎ sequence · ⌘P pin · ⌘Y preview"
+                     : "⌘Y or esc close preview · ↑↓ next · ⏎ paste")
                     .lineLimit(1)
+                    .truncationMode(.tail)
+                    .help("⏎ paste · ⇧⏎ paste as plain text · ⌘⏎ copy only · ⌥⏎ paste sequentially (then ⌥⇧⌘V) · ⌘P pin · ⌘Y preview · ⌘⌫ delete · ⌘1–9 paste n-th")
                 Spacer(minLength: 8)
                 if !model.accessibilityGranted {
-                    Text("No Accessibility access: copy only")
+                    Text("Copy only")
                         .lineLimit(1)
                         .foregroundStyle(.orange)
-                        .help("Grant access from the Clipvault menu to enable auto-paste")
+                        .help("No Accessibility access. Grant it from the Clipvault menu to enable auto-paste")
                 }
             }
             .font(.system(size: 11))
             .foregroundStyle(.secondary)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 7)
         }
+        .modifier(GlassScrim())
         .onChange(of: model.focusToken) { _, _ in searchFocused = true }
         .onAppear { searchFocused = true }
+    }
+
+    private var list: some View {
+        ScrollViewReader { proxy in
+            ScrollView {
+                LazyVStack(spacing: 2) {
+                    ForEach(Array(model.items.enumerated()), id: \.element.id) { index, item in
+                        HistoryRow(item: item, index: index, selected: index == model.selection,
+                                   thumbnail: model.thumbnail(for: item))
+                            .id(item.id)
+                            .contentShape(Rectangle())
+                            .onTapGesture(count: 2) { model.choose(index: index) }
+                            .onTapGesture { model.selection = index }
+                            .contextMenu { menu(for: item, index: index) }
+                    }
+                }
+                .padding(8)
+            }
+            .onChange(of: model.selection) { _, new in
+                if model.items.indices.contains(new) { proxy.scrollTo(model.items[new].id) }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func menu(for item: ClipSummary, index: Int) -> some View {
+        Button("Paste") { model.perform(.paste, index: index) }
+        if item.kind != .image {
+            Button("Paste as Plain Text") { model.perform(.pastePlain, index: index) }
+        }
+        Button("Copy") { model.perform(.copy, index: index) }
+        Button("Paste Sequentially from Here") { model.startSequence(index: index) }
+        Divider()
+        Button(item.pinned ? "Unpin" : "Pin") { model.togglePin(index: index) }
+        Button("Preview") {
+            model.selection = index
+            model.togglePreview()
+        }
+        Divider()
+        Button("Delete", role: .destructive) { model.delete(index: index) }
+    }
+}
+
+/// Keeps text readable over busy backgrounds without losing the glass.
+private struct GlassScrim: ViewModifier {
+    @Environment(\.colorScheme) private var scheme
+
+    func body(content: Content) -> some View {
+        #if compiler(>=6.2)
+        if #available(macOS 26, *) {
+            content.background(scheme == .dark ? Color.black.opacity(0.22) : Color.white.opacity(0.3))
+        } else {
+            content
+        }
+        #else
+        content
+        #endif
+    }
+}
+
+struct PreviewPane: View {
+    let preview: ClipPreview
+
+    var body: some View {
+        Group {
+            if let image = preview.image {
+                Image(nsImage: image)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .padding(12)
+            } else {
+                ScrollView {
+                    Text(preview.text ?? "")
+                        .font(.system(size: 13, design: .monospaced))
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .topLeading)
+                        .padding(14)
+                }
+            }
+        }
+        .frame(maxHeight: .infinity)
     }
 }
 
@@ -141,42 +272,65 @@ struct HistoryRow: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            Group {
-                if let thumbnail {
-                    Image(nsImage: thumbnail).resizable().aspectRatio(contentMode: .fit)
-                } else {
-                    Image(systemName: icon).font(.system(size: 16)).foregroundStyle(.secondary)
-                }
-            }
-            .frame(width: 36, height: 36)
-            .clipShape(RoundedRectangle(cornerRadius: 4))
+            leading
+                .frame(width: 36, height: 36)
+                .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(title).lineLimit(2).font(.system(size: 13))
                 Text(subtitle).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1)
             }
             Spacer(minLength: 4)
+            if item.pinned {
+                Image(systemName: "pin.fill").font(.system(size: 10)).foregroundStyle(.secondary)
+                    .help("Pinned: kept until unpinned")
+            }
             if index < 9 {
                 Text("⌘\(index + 1)").font(.system(size: 11, design: .monospaced)).foregroundStyle(.tertiary)
             }
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 5)
-        .modifier(SelectionBackground(selected: selected))
+        .background(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(selected ? Color.primary.opacity(0.1) : .clear)
+        )
+    }
+
+    @ViewBuilder
+    private var leading: some View {
+        if let thumbnail {
+            Image(nsImage: thumbnail).resizable().aspectRatio(contentMode: .fit)
+        } else if let color = ClipContent.color(in: item.preview) {
+            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                .fill(Color(nsColor: color))
+                .overlay(RoundedRectangle(cornerRadius: 6, style: .continuous).strokeBorder(.primary.opacity(0.15)))
+                .padding(4)
+        } else {
+            Image(systemName: icon).font(.system(size: 16)).foregroundStyle(.secondary)
+        }
+    }
+
+    private var link: URL? {
+        item.kind == .files || item.kind == .image ? nil : ClipContent.link(in: item.preview)
     }
 
     private var icon: String {
+        if link != nil { return "link" }
         switch item.kind {
-        case .text: "doc.plaintext"
-        case .rtf: "doc.richtext"
-        case .html: "globe"
-        case .image: "photo"
-        case .files: "folder"
+        case .text: return "doc.plaintext"
+        case .rtf: return "doc.richtext"
+        case .html: return "globe"
+        case .image: return "photo"
+        case .files: return "folder"
         }
     }
 
     private var title: String {
-        if item.kind == .image { return "Image · " + ByteCountFormatter.string(fromByteCount: Int64(item.size), countStyle: .file) }
+        if item.kind == .image {
+            let size = "Image · " + ByteCountFormatter.string(fromByteCount: Int64(item.size), countStyle: .file)
+            return item.preview.isEmpty ? size : "\(size) — \(item.preview)"
+        }
         return item.preview.isEmpty ? "(no text)" : item.preview
     }
 
@@ -185,7 +339,7 @@ struct HistoryRow: View {
         let rel = Date().timeIntervalSince(date) < 60
             ? "just now"
             : Self.relative.localizedString(for: date, relativeTo: Date())
-        return [item.sourceApp, rel].compactMap { $0 }.joined(separator: " · ")
+        return [link?.host, item.sourceApp, rel].compactMap { $0 }.joined(separator: " · ")
     }
 
     private static let relative: RelativeDateTimeFormatter = {
@@ -193,34 +347,4 @@ struct HistoryRow: View {
         f.unitsStyle = .short
         return f
     }()
-}
-
-/// Glass-style highlight for the selected row.
-private struct SelectionBackground: ViewModifier {
-    let selected: Bool
-
-    func body(content: Content) -> some View {
-        let shape = RoundedRectangle(cornerRadius: 8, style: .continuous)
-        #if compiler(>=6.2)
-        if #available(macOS 26, *) {
-            if selected {
-                content.glassEffect(.regular.tint(.accentColor.opacity(0.35)), in: shape)
-            } else {
-                content
-            }
-        } else {
-            fallback(content, shape)
-        }
-        #else
-        fallback(content, shape)
-        #endif
-    }
-
-    private func fallback(_ content: Content, _ shape: RoundedRectangle) -> some View {
-        content.background(
-            shape
-                .fill(selected ? Color.accentColor.opacity(0.3) : .clear)
-                .overlay(shape.strokeBorder(selected ? Color.white.opacity(0.18) : .clear, lineWidth: 0.5))
-        )
-    }
 }

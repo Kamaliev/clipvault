@@ -35,7 +35,7 @@ final class PopupPanel: NSPanel {
 /// Translucent backdrop showing what is behind the window: Liquid Glass on macOS 26+,
 /// classic behind-window vibrancy on older systems.
 @MainActor
-func makeGlassContainer(hosting content: NSView, cornerRadius: CGFloat = 16) -> NSView {
+func makeGlassContainer(hosting content: NSView, cornerRadius: CGFloat = 24) -> NSView {
     #if compiler(>=6.2)
     if #available(macOS 26, *) {
         let glass = NSGlassEffectView()
@@ -71,13 +71,26 @@ final class PopupController: NSObject, NSWindowDelegate {
     private let viewModel: HistoryViewModel
     private var keyMonitor: Any?
     private var previousApp: NSRunningApplication?
-    private let onChoose: (Int64, NSRunningApplication?) -> Void
+    private let onAction: (ClipAction, Int64, NSRunningApplication?) -> Void
+    private let onSequence: ([Int64], NSRunningApplication?) -> Void
 
-    init(store: Store, onChoose: @escaping (Int64, NSRunningApplication?) -> Void) {
+    init(store: Store,
+         onAction: @escaping (ClipAction, Int64, NSRunningApplication?) -> Void,
+         onSequence: @escaping ([Int64], NSRunningApplication?) -> Void) {
         viewModel = HistoryViewModel(store: store)
-        self.onChoose = onChoose
+        self.onAction = onAction
+        self.onSequence = onSequence
         super.init()
-        viewModel.onChoose = { [weak self] id in self?.choose(id) }
+        viewModel.onAction = { [weak self] action, id in
+            guard let self else { return }
+            self.close()
+            self.onAction(action, id, self.previousApp)
+        }
+        viewModel.onSequence = { [weak self] ids in
+            guard let self else { return }
+            self.close()
+            self.onSequence(ids, self.previousApp)
+        }
         panel.delegate = self
         let hosting = NSHostingView(rootView: HistoryView(model: viewModel))
         hosting.wantsLayer = true
@@ -120,11 +133,6 @@ final class PopupController: NSObject, NSWindowDelegate {
         close()
     }
 
-    private func choose(_ id: Int64) {
-        close()
-        onChoose(id, previousApp)
-    }
-
     private func position() {
         let mouse = NSEvent.mouseLocation
         let screen = NSScreen.screens.first { NSMouseInRect(mouse, $0.frame, false) } ?? NSScreen.main
@@ -149,12 +157,25 @@ final class PopupController: NSObject, NSWindowDelegate {
 
     private func handle(_ event: NSEvent) -> Bool {
         let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        let mods = flags.intersection([.command, .shift, .option, .control])
         switch Int(event.keyCode) {
         case 125: viewModel.move(1); return true // ↓
         case 126: viewModel.move(-1); return true // ↑
-        case 36, 76: viewModel.chooseSelected(); return true // ⏎
-        case 53: close(); return true // esc
-        case 51 where flags.contains(.command): viewModel.deleteSelected(); return true // ⌘⌫
+        case 36, 76: // ⏎
+            switch mods {
+            case []: viewModel.perform(.paste)
+            case .shift: viewModel.perform(.pastePlain)
+            case .command: viewModel.perform(.copy)
+            case .option: viewModel.startSequence()
+            default: return false
+            }
+            return true
+        case 53: // esc
+            if !viewModel.closePreview() { close() }
+            return true
+        case 51 where mods == .command: viewModel.delete(); return true // ⌘⌫
+        case 35 where mods == .command: viewModel.togglePin(); return true // ⌘P
+        case 16 where mods == .command: viewModel.togglePreview(); return true // ⌘Y
         default: break
         }
         if flags.contains(.command), let ch = event.charactersIgnoringModifiers, let n = Int(ch), (1...9).contains(n) {

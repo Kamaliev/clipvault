@@ -17,13 +17,24 @@ enum Paster {
             item.setData(rep.data, forType: .init(rep.uti))
         }
         let ordered = order.compactMap { items[$0] }
-        if let first = ordered.first {
-            first.setData(Data(), forType: PasteboardMonitor.ownType)
-            first.setString(Bundle.main.bundleIdentifier ?? "com.kamaliev.clipvault",
-                            forType: .init("org.nspasteboard.source"))
-        }
+        if let first = ordered.first { markOwn(first) }
         pasteboard.clearContents()
         pasteboard.writeObjects(ordered)
+    }
+
+    /// Writes only plain text, dropping formatting and other representations.
+    static func writePlain(_ text: String, to pasteboard: NSPasteboard = .general) {
+        let item = NSPasteboardItem()
+        item.setString(text, forType: .string)
+        markOwn(item)
+        pasteboard.clearContents()
+        pasteboard.writeObjects([item])
+    }
+
+    private static func markOwn(_ item: NSPasteboardItem) {
+        item.setData(Data(), forType: PasteboardMonitor.ownType)
+        item.setString(Bundle.main.bundleIdentifier ?? "com.kamaliev.clipvault",
+                       forType: .init("org.nspasteboard.source"))
     }
 
     static var isTrusted: Bool { AXIsProcessTrusted() }

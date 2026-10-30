@@ -3,7 +3,7 @@
 Encrypted clipboard history for macOS with a fixed 24-hour retention window.
 
 Press <kbd>⇧⌘V</kbd>, search, press <kbd>⏎</kbd>. Every record is encrypted at rest with a key
-held in the macOS Keychain and is deleted after 24 hours.
+held in the macOS Keychain and is deleted after 24 hours unless you pin it.
 
 [![CI](https://github.com/Kamaliev/clipvault/actions/workflows/ci.yml/badge.svg)](https://github.com/Kamaliev/clipvault/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/Kamaliev/clipvault)](https://github.com/Kamaliev/clipvault/releases/latest)
@@ -37,9 +37,14 @@ To build from source, see [Development](#development).
 - Captures text, RTF, HTML, images (with thumbnails) and file lists. All pasteboard representations
   are restored on paste, so formatting is preserved.
 - Optional auto-paste into the application that was active when the panel was opened.
-- Instant search over text, file paths and source application name.
+- Instant search over text, file paths, source application name and text recognized in images
+  (on-device Vision OCR, can be turned off in Settings).
+- Paste as plain text, copy without pasting, and paste a run of items one after another.
+- Pinned items stay on top and never expire.
+- Preview of the full text or image; links and colors (`#rrggbb`, `rgb()`) are recognized in the list.
+- Translucent panel: Liquid Glass on macOS 26, vibrancy on macOS 14–15.
 - Per-record encryption (XChaCha20-Poly1305); master key in the Keychain.
-- Records expire after 24 hours. Expired records are hidden immediately and securely deleted.
+- Records expire after 24 hours unless pinned. Expired records are hidden immediately and securely deleted.
 - Content flagged by password managers as concealed or transient is ignored.
 - Optional launch at login.
 - Menu-bar only; no Dock icon. The pasteboard is read only when its change counter advances.
@@ -52,11 +57,20 @@ To build from source, see [Development](#development).
 | Typing | Filter (all words, case-insensitive) |
 | <kbd>↑</kbd> <kbd>↓</kbd> | Move selection |
 | <kbd>⏎</kbd> or double-click | Paste |
+| <kbd>⇧⏎</kbd> | Paste as plain text |
+| <kbd>⌘⏎</kbd> | Copy to the pasteboard without pasting |
+| <kbd>⌥⏎</kbd> | Paste sequentially: pastes the record, then each <kbd>⌥⇧⌘V</kbd> pastes the next newer one |
 | <kbd>⌘1</kbd> … <kbd>⌘9</kbd> | Paste the n-th record |
+| <kbd>⌘P</kbd> | Pin or unpin |
+| <kbd>⌘Y</kbd> | Preview full text or image |
 | <kbd>⌘⌫</kbd> | Delete record |
-| <kbd>Esc</kbd> | Close |
+| <kbd>Esc</kbd> | Close preview, then the panel |
 
-The menu-bar menu provides pause, auto-paste and launch-at-login toggles, clear history and Settings.
+Right-click a record for the same actions. Unpinning a record restarts its 24-hour lifetime.
+<kbd>⌥⇧⌘V</kbd> is registered only while a paste sequence is running.
+
+The menu-bar menu provides pause, auto-paste and launch-at-login toggles, the active paste sequence,
+clear history (pinned records are kept; Settings › Clear All removes them too) and Settings.
 
 The panel can also be toggled externally, for example from Shortcuts:
 
@@ -72,8 +86,9 @@ master key (32 bytes, Keychain)
                    └─ hash key       → keyed BLAKE3, content-blind deduplication
 ```
 
-- Encrypted: all representations, preview text, search text, source application name, thumbnails.
-- Plaintext metadata: record id, kind (text, image, …), timestamp, size.
+- Encrypted: all representations, preview text, search text (including OCR text), source application
+  name, thumbnails.
+- Plaintext metadata: record id, kind (text, image, …), timestamp, size, pinned flag.
 - Integrity: AAD binds every blob to its record; tampering or reordering is detected.
 - Deletion: SQLite `secure_delete=ON`, no WAL; directory `0700`, database `0600`.
 - Key: generated on first launch (`SecRandomCopyBytes`) with `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly`;
@@ -96,7 +111,7 @@ Swift bindings are generated at build time and the core is linked as a static li
 ```
 core/                 Rust crate clipvault-core
   src/crypto.rs       AEAD, HKDF, keyed hash
-  src/store.rs        SQLite, TTL, deduplication, UniFFI API
+  src/store.rs        SQLite, TTL, pins, deduplication, UniFFI API
   src/preview.rs      kind detection, RTF/HTML → text, search
   src/model.rs        types exported to Swift
   tests/store.rs

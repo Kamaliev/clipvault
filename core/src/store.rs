@@ -115,6 +115,23 @@ fn decode_rep(b: &[u8]) -> Result<ClipRep> {
     Ok(ClipRep { item, uti, data })
 }
 
+const SCHEMA_VERSION: i64 = 2;
+const LIVE: &str = "(pinned = 1 OR created_at > ?1)";
+
+fn migrate(conn: &Connection) -> Result<()> {
+    let version: i64 = conn.query_row("PRAGMA user_version", [], |r| r.get(0))?;
+    if version < 2 {
+        let has_pinned = conn
+            .prepare("SELECT 1 FROM pragma_table_info('entry') WHERE name = 'pinned'")?
+            .exists([])?;
+        if !has_pinned {
+            conn.execute_batch("ALTER TABLE entry ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0;")?;
+        }
+    }
+    conn.execute_batch(&format!("PRAGMA user_version = {SCHEMA_VERSION};"))?;
+    Ok(())
+}
+
 #[cfg(unix)]
 fn restrict_permissions(path: &Path, mode: u32) {
     use std::os::unix::fs::PermissionsExt;
@@ -163,8 +180,9 @@ impl Store {
                  payload BLOB NOT NULL,
                  PRIMARY KEY (entry_id, idx)
              );
-             PRAGMA user_version = 1;",
+",
         )?;
+        migrate(&conn)?;
         let check: Option<Vec<u8>> = conn
             .query_row("SELECT value FROM kv WHERE key = 'check'", [], |r| r.get(0))
             .optional()?;
@@ -227,7 +245,13 @@ impl Store {
             return Ok(None);
         }
         let kind = preview::detect_kind(&reps);
-        let search = preview::plain_text(kind, &reps);
+        let search = match kind {
+            ClipKind::Image => preview::truncate_chars(
+                clip.ocr_text.as_deref().unwrap_or("").trim(),
+                preview::SEARCH_CHARS,
+            ),
+            _ => preview::plain_text(kind, &reps),
+        };
         if kind != ClipKind::Image && search.trim().is_empty() {
             return Ok(None);
         }
@@ -280,14 +304,15 @@ impl Store {
         Ok(Some(id))
     }
 
-    /// Lists non-expired entries, newest first, optionally filtered by a search query.
+    /// Lists pinned and non-expired entries (pinned first, then newest first),
+    /// optionally filtered by a search query.
     pub fn list(&self, query: Option<String>, limit: u32) -> Result<Vec<ClipSummary>> {
         let query = query.unwrap_or_default();
         let conn = self.conn();
-        let mut stmt = conn.prepare(
-            "SELECT id, hash, kind, created_at, size, meta, thumb IS NOT NULL
-             FROM entry WHERE created_at > ?1 ORDER BY created_at DESC, id DESC",
-        )?;
+        let mut stmt = conn.prepare(&format!(
+            "SELECT id, hash, kind, created_at, size, meta, thumb IS NOT NULL, pinned
+             FROM entry WHERE {LIVE} ORDER BY pinned DESC, created_at DESC, id DESC"
+        ))?;
         let rows = stmt.query_map(params![self.cutoff()], |r| {
             Ok((
                 r.get::<_, i64>(0)?,
@@ -297,11 +322,12 @@ impl Store {
                 r.get::<_, i64>(4)?,
                 r.get::<_, Vec<u8>>(5)?,
                 r.get::<_, bool>(6)?,
+                r.get::<_, bool>(7)?,
             ))
         })?;
         let mut out = Vec::new();
         for row in rows {
-            let (id, hash, kind, created_at, size, meta_ct, has_thumbnail) = row?;
+            let (id, hash, kind, created_at, size, meta_ct, has_thumbnail, pinned) = row?;
             let Ok(pt) = self.keys.open(&meta_ct, &aad_meta(&hash)) else {
                 continue;
             };
@@ -319,6 +345,7 @@ impl Store {
                 created_at,
                 size: size as u64,
                 has_thumbnail,
+                pinned,
             });
             if out.len() >= limit as usize {
                 break;
@@ -332,8 +359,8 @@ impl Store {
         let conn = self.conn();
         let hash: Vec<u8> = conn
             .query_row(
-                "SELECT hash FROM entry WHERE id = ?1 AND created_at > ?2",
-                params![id, self.cutoff()],
+                &format!("SELECT hash FROM entry WHERE id = ?2 AND {LIVE}"),
+                params![self.cutoff(), id],
                 |r| r.get(0),
             )
             .optional()?
@@ -381,23 +408,47 @@ impl Store {
         }
     }
 
+    /// Pins or unpins an entry. Unpinning restarts its 24-hour lifetime so it does not
+    /// disappear immediately.
+    pub fn set_pinned(&self, id: i64, pinned: bool) -> Result<()> {
+        let n = if pinned {
+            self.conn()
+                .execute("UPDATE entry SET pinned = 1 WHERE id = ?1", params![id])?
+        } else {
+            self.conn().execute(
+                "UPDATE entry SET pinned = 0, created_at = MAX(created_at, ?1) WHERE id = ?2",
+                params![(self.clock)(), id],
+            )?
+        };
+        if n == 0 {
+            Err(CoreError::NotFound)
+        } else {
+            Ok(())
+        }
+    }
+
     pub fn delete(&self, id: i64) -> Result<()> {
         self.conn()
             .execute("DELETE FROM entry WHERE id = ?1", params![id])?;
         Ok(())
     }
 
-    pub fn clear(&self) -> Result<()> {
+    /// Deletes all entries, or only unpinned ones when `keep_pinned` is set.
+    pub fn clear(&self, keep_pinned: bool) -> Result<()> {
         let conn = self.conn();
-        conn.execute("DELETE FROM entry", [])?;
+        if keep_pinned {
+            conn.execute("DELETE FROM entry WHERE pinned = 0", [])?;
+        } else {
+            conn.execute("DELETE FROM entry", [])?;
+        }
         conn.execute_batch("VACUUM")?;
         Ok(())
     }
 
-    /// Removes entries older than the TTL. Returns the number of removed entries.
+    /// Removes unpinned entries older than the TTL. Returns the number of removed entries.
     pub fn purge_expired(&self) -> Result<u32> {
         let n = self.conn().execute(
-            "DELETE FROM entry WHERE created_at <= ?1",
+            "DELETE FROM entry WHERE pinned = 0 AND created_at <= ?1",
             params![self.cutoff()],
         )?;
         Ok(n as u32)
@@ -405,7 +456,7 @@ impl Store {
 
     pub fn count(&self) -> Result<u32> {
         let n: i64 = self.conn().query_row(
-            "SELECT COUNT(*) FROM entry WHERE created_at > ?1",
+            &format!("SELECT COUNT(*) FROM entry WHERE {LIVE}"),
             params![self.cutoff()],
             |r| r.get(0),
         )?;

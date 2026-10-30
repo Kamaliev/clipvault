@@ -19,6 +19,7 @@ struct SettingsView: View {
                 Text(error).foregroundStyle(.red)
             }
             Toggle("Paste selected item automatically (⌘V)", isOn: $model.autoPaste)
+            Toggle("Recognize text in images for search (on-device)", isOn: $model.recognizeText)
             Toggle("Launch at login", isOn: $model.launchAtLogin)
                 .disabled(!LaunchAtLogin.isAvailable)
             if let error = model.launchAtLoginError {
@@ -35,7 +36,7 @@ struct SettingsView: View {
                 }
             }
             LabeledContent("Storage") {
-                Text("24 hours, XChaCha20-Poly1305, key in Keychain")
+                Text("24 hours (pinned kept), XChaCha20-Poly1305, key in Keychain")
                     .foregroundStyle(.secondary)
             }
             if let warning = model.storageWarning {
@@ -45,6 +46,9 @@ struct SettingsView: View {
                 HStack {
                     Text("\(model.entryCount)")
                     Button("Clear") { model.clearHistory() }
+                        .help("Delete all items except pinned ones")
+                    Button("Clear All") { model.clearHistory(includingPinned: true) }
+                        .help("Delete everything, including pinned items")
                 }
             }
         }

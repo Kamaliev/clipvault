@@ -6,10 +6,22 @@ the project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Pinned records: listed first and exempt from the 24-hour expiry (⌘P or context menu).
+- Paste as plain text (⇧⏎), copy without pasting (⌘⏎).
+- Paste sequentially (⌥⏎, then ⌥⇧⌘V for each next record).
+- Preview of the full text or image (⌘Y).
+- Text in copied images is recognized on device (Vision) and searchable; stored encrypted.
+- Links and colors are recognized in the list (link icon with host, color swatch).
+- Context menu on records; Settings › Clear All also removes pinned records.
+
 ### Changed
 
 - The history popup is now truly translucent: Liquid Glass on macOS 26, behind-window vibrancy on macOS 14–15.
-- Glass-style highlight for the selected row.
+- Neutral row highlight and a light scrim over the glass for readability.
+- Clear History keeps pinned records.
+- Database schema version 2 (adds the pinned flag); migrated automatically.
 - CI and release builds run on `macos-26` (macOS 26 SDK).
 
 ## [0.1.1] - 2026-10-30
