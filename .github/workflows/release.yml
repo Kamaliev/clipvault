@@ -11,6 +11,8 @@ jobs:
   build:
     name: Build and publish
     runs-on: macos-14
+    env:
+      TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -28,12 +30,10 @@ jobs:
           gh release create "${{ github.ref_name }}" build/Clipvault-*.zip \
             --title "${{ github.ref_name }}" --generate-notes
       - name: Update Homebrew tap
-        if: ${{ secrets.HOMEBREW_TAP_TOKEN != '' }}
-        env:
-          TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        if: ${{ env.TAP_TOKEN != '' }}
         run: |
           version="${GITHUB_REF_NAME#v}"
-          sha="$(shasum -a 256 build/Clipvault-${version}.zip | cut -d' ' -f1)"
+          sha="$(shasum -a 256 "build/Clipvault-${version}.zip" | cut -d' ' -f1)"
           git clone "https://x-access-token:${TAP_TOKEN}@github.com/${GITHUB_REPOSITORY_OWNER}/homebrew-tap.git" tap
           cd tap
           sed -i '' -e "s/^  version \".*\"/  version \"${version}\"/" \
