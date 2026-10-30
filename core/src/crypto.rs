@@ -23,7 +23,7 @@ impl Keys {
                 master.len()
             )));
         }
-        let hk = Hkdf::<Sha256>::new(Some(b"pb-window/v1"), master);
+        let hk = Hkdf::<Sha256>::new(Some(b"clipvault/v1"), master);
         let mut enc = Zeroizing::new([0u8; 32]);
         let mut hash_key = Zeroizing::new([0u8; 32]);
         hk.expand(b"encryption", enc.as_mut())

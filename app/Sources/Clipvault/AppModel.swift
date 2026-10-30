@@ -57,7 +57,7 @@ final class AppModel: ObservableObject {
         registerHotKey()
         // Lets scripts/Shortcuts open the popup without the hotkey.
         DistributedNotificationCenter.default().addObserver(
-            forName: .init("com.kamaliev.pb-window.toggle"), object: nil, queue: .main
+            forName: .init("com.kamaliev.clipvault.toggle"), object: nil, queue: .main
         ) { [weak self] _ in
             Task { @MainActor in self?.togglePopup() }
         }
@@ -94,7 +94,7 @@ final class AppModel: ObservableObject {
     func openSettings() {
         if settingsWindow == nil {
             let window = NSWindow(contentViewController: NSHostingController(rootView: SettingsView(model: self)))
-            window.title = "pb-window — настройки"
+            window.title = "Clipvault — настройки"
             window.styleMask = [.titled, .closable]
             window.isReleasedWhenClosed = false
             settingsWindow = window
@@ -111,7 +111,7 @@ final class AppModel: ObservableObject {
         do {
             reps = try store.get(id: id)
         } catch {
-            NSLog("pb-window: get failed: \(error)")
+            NSLog("clipvault: get failed: \(error)")
             return
         }
         Paster.write(reps)
@@ -150,7 +150,7 @@ final class AppModel: ObservableObject {
 
     private static func databasePath() throws -> String {
         let base = try FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
-        return base.appendingPathComponent("pb-window", isDirectory: true).appendingPathComponent("history.db").path
+        return base.appendingPathComponent("Clipvault", isDirectory: true).appendingPathComponent("history.db").path
     }
 
     /// Opens the encrypted on-disk store. Falls back to an in-memory store if the Keychain is unavailable.
@@ -167,7 +167,7 @@ final class AppModel: ObservableObject {
                 return (try Store.open(path: path, key: key, ttlSecs: ttl, maxBytes: max), nil)
             }
         } catch {
-            NSLog("pb-window: persistent store unavailable: \(error)")
+            NSLog("clipvault: persistent store unavailable: \(error)")
             let key = (try? KeychainKey.randomKey()) ?? Data((0..<32).map { _ in UInt8.random(in: 0...255) })
             // swiftlint:disable:next force_try
             let store = try! Store.open(path: ":memory:", key: key, ttlSecs: ttl, maxBytes: max)

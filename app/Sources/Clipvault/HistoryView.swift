@@ -32,7 +32,7 @@ final class HistoryViewModel: ObservableObject {
         do {
             items = try store.list(query: q.isEmpty ? nil : q, limit: 300)
         } catch {
-            NSLog("pb-window: list failed: \(error)")
+            NSLog("clipvault: list failed: \(error)")
             items = []
         }
         selection = min(selection, max(items.count - 1, 0))
@@ -120,7 +120,7 @@ struct HistoryView: View {
                     Text("Нет доступа Accessibility — только копирование")
                         .lineLimit(1)
                         .foregroundStyle(.orange)
-                        .help("Разрешите доступ в меню pb-window, чтобы включить автовставку")
+                        .help("Разрешите доступ в меню Clipvault, чтобы включить автовставку")
                 }
             }
             .font(.system(size: 11))

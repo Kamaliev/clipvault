@@ -19,7 +19,7 @@ enum Paster {
         let ordered = order.compactMap { items[$0] }
         if let first = ordered.first {
             first.setData(Data(), forType: PasteboardMonitor.ownType)
-            first.setString(Bundle.main.bundleIdentifier ?? "com.kamaliev.pb-window",
+            first.setString(Bundle.main.bundleIdentifier ?? "com.kamaliev.clipvault",
                             forType: .init("org.nspasteboard.source"))
         }
         pasteboard.clearContents()

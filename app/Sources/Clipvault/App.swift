@@ -12,12 +12,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 }
 
 @main
-struct PbWindowApp: App {
+struct ClipvaultApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
     @ObservedObject private var model = AppModel.shared
 
     var body: some Scene {
-        MenuBarExtra("pb-window", systemImage: model.paused ? "clipboard" : "doc.on.clipboard") {
+        MenuBarExtra("Clipvault", systemImage: model.paused ? "clipboard" : "doc.on.clipboard") {
             MenuContent(model: model)
         }
     }

@@ -1,8 +1,8 @@
 /build/
 /core/target/
 /app/.build/
-/app/PbWindow.xcodeproj/
-/app/Sources/PbCoreFFI/pbcoreFFI.h
-/app/Sources/PbWindow/Generated/
+/app/Clipvault.xcodeproj/
+/app/Sources/CoreFFI/clipvault_coreFFI.h
+/app/Sources/Clipvault/Generated/
 .DS_Store
 .swiftpm/

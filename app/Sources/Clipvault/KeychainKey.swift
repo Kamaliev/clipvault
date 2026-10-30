@@ -3,7 +3,7 @@ import Security
 
 /// 256-bit master key for the history database, kept in the login Keychain.
 enum KeychainKey {
-    static let service = "com.kamaliev.pb-window"
+    static let service = "com.kamaliev.clipvault"
     static let account = "history-master-key"
 
     struct Failure: Error, CustomStringConvertible {
@@ -20,7 +20,7 @@ enum KeychainKey {
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: account,
-            kSecAttrLabel as String: "pb-window history key",
+            kSecAttrLabel as String: "Clipvault history key",
             kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
             kSecValueData as String: key,
         ]

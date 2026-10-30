@@ -7,8 +7,8 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 CORE="$ROOT/core"
 PROFILE="${PROFILE:-release}"
 OUT="$ROOT/build/core"
-GEN_FFI="$ROOT/app/Sources/PbCoreFFI"
-GEN_SWIFT="$ROOT/app/Sources/PbWindow/Generated"
+GEN_FFI="$ROOT/app/Sources/CoreFFI"
+GEN_SWIFT="$ROOT/app/Sources/Clipvault/Generated"
 export MACOSX_DEPLOYMENT_TARGET="${MACOSX_DEPLOYMENT_TARGET:-14.0}"
 
 flag=""; [ "$PROFILE" = "release" ] && flag="--release"
@@ -19,26 +19,26 @@ targets=("$host")
 libs=()
 for t in "${targets[@]}"; do
   cargo build --manifest-path "$CORE/Cargo.toml" --lib $flag --target "$t"
-  libs+=("$CORE/target/$t/$PROFILE/libpbcore.a")
+  libs+=("$CORE/target/$t/$PROFILE/libclipvault_core.a")
 done
 
 mkdir -p "$OUT" "$GEN_FFI" "$GEN_SWIFT"
 if [ "${#libs[@]}" -gt 1 ]; then
-  lipo -create "${libs[@]}" -output "$OUT/libpbcore.a"
+  lipo -create "${libs[@]}" -output "$OUT/libclipvault_core.a"
 else
-  cp "${libs[0]}" "$OUT/libpbcore.a"
+  cp "${libs[0]}" "$OUT/libclipvault_core.a"
 fi
 
 tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
 (cd "$CORE" && cargo run --quiet --bin uniffi-bindgen -- \
   generate --library "${libs[0]}" --language swift --out-dir "$tmp")
-cp "$tmp/pbcore.swift" "$GEN_SWIFT/pbcore.swift"
-cp "$tmp/pbcoreFFI.h" "$GEN_FFI/pbcoreFFI.h"
+cp "$tmp/clipvault_core.swift" "$GEN_SWIFT/clipvault_core.swift"
+cp "$tmp/clipvault_coreFFI.h" "$GEN_FFI/clipvault_coreFFI.h"
 cat > "$GEN_FFI/module.modulemap" <<MAP
-module pbcoreFFI {
-    header "pbcoreFFI.h"
-    link "pbcore"
+module clipvault_coreFFI {
+    header "clipvault_coreFFI.h"
+    link "clipvault_core"
     export *
 }
 MAP
-echo "core built: $OUT/libpbcore.a (${targets[*]})"
+echo "core built: $OUT/libclipvault_core.a (${targets[*]})"

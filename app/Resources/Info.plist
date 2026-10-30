@@ -5,15 +5,15 @@
     <key>CFBundleDevelopmentRegion</key>
     <string>ru</string>
     <key>CFBundleExecutable</key>
-    <string>PbWindow</string>
+    <string>Clipvault</string>
     <key>CFBundleIdentifier</key>
-    <string>com.kamaliev.pb-window</string>
+    <string>com.kamaliev.clipvault</string>
     <key>CFBundleInfoDictionaryVersion</key>
     <string>6.0</string>
     <key>CFBundleName</key>
-    <string>pb-window</string>
+    <string>Clipvault</string>
     <key>CFBundleDisplayName</key>
-    <string>pb-window</string>
+    <string>Clipvault</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>

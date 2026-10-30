@@ -3,11 +3,11 @@
 core:            ## Rust static lib + UniFFI Swift bindings
 	./scripts/build-core.sh
 
-app:             ## build/pb-window.app (release, ad-hoc signed)
+app:             ## build/Clipvault.app (release, ad-hoc signed)
 	./scripts/bundle-app.sh
 
 run: app
-	open build/pb-window.app
+	open build/Clipvault.app
 
 test:
 	cargo test --manifest-path core/Cargo.toml
@@ -15,9 +15,9 @@ test:
 lint:
 	cargo clippy --manifest-path core/Cargo.toml --all-targets -- -D warnings
 
-xcode: core      ## generate app/PbWindow.xcodeproj (requires xcodegen + Xcode)
+xcode: core      ## generate app/Clipvault.xcodeproj (requires xcodegen + Xcode)
 	cd app && xcodegen generate
 
 clean:
-	rm -rf build app/.build app/PbWindow.xcodeproj
+	rm -rf build app/.build app/Clipvault.xcodeproj
 	cargo clean --manifest-path core/Cargo.toml

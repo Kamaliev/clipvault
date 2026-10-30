@@ -5,7 +5,7 @@ import UniformTypeIdentifiers
 /// Watches NSPasteboard.changeCount (a cheap call) and reads data only when it changes.
 /// Polling is coalesced via timer tolerance and suspended while the system sleeps.
 final class PasteboardMonitor {
-    static let ownType = NSPasteboard.PasteboardType("com.kamaliev.pb-window.own")
+    static let ownType = NSPasteboard.PasteboardType("com.kamaliev.clipvault.own")
 
     /// Types set by password managers and other apps that mark content as sensitive/transient
     /// (see nspasteboard.org).
@@ -27,7 +27,7 @@ final class PasteboardMonitor {
     private let pasteboard = NSPasteboard.general
     private let store: Store
     private let maxBytes: Int
-    private let queue = DispatchQueue(label: "pb-window.ingest", qos: .utility)
+    private let queue = DispatchQueue(label: "clipvault.ingest", qos: .utility)
     private var lastChangeCount: Int
     private var timer: Timer?
     private var observers: [NSObjectProtocol] = []
@@ -113,7 +113,7 @@ final class PasteboardMonitor {
                     DispatchQueue.main.async { self?.onAdded?() }
                 }
             } catch {
-                NSLog("pb-window: failed to store clip: \(error)")
+                NSLog("clipvault: failed to store clip: \(error)")
             }
         }
     }
