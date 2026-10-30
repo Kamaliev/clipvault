@@ -79,10 +79,10 @@ final class PopupController: NSObject, NSWindowDelegate {
     private var previousApp: NSRunningApplication?
     private let onAction: (ClipAction, Int64, NSRunningApplication?) -> Void
     private let onSequence: ([Int64], NSRunningApplication?) -> Void
+    private let previewer = PreviewController()
     private var previewObserver: AnyCancellable?
-    /// Panel width before the preview pane widened it.
-    private var collapsedWidth: CGFloat?
-    private static let previewWidth: CGFloat = 900
+    /// Popup origin before it moved aside for the preview window.
+    private var originBeforePreview: NSPoint?
 
     init(store: Store,
          onAction: @escaping (ClipAction, Int64, NSRunningApplication?) -> Void,
@@ -107,31 +107,21 @@ final class PopupController: NSObject, NSWindowDelegate {
         hosting.layer?.backgroundColor = .clear
         panel.contentView = makeGlassContainer(hosting: hosting)
         previewObserver = viewModel.$preview
-            .map { $0 != nil }
-            .removeDuplicates()
             .dropFirst()
-            .sink { [weak self] open in self?.resizeForPreview(open) }
+            .sink { [weak self] preview in self?.updatePreview(preview) }
     }
 
-    /// Widens the panel while the preview pane is shown, keeping it centered.
-    private func resizeForPreview(_ open: Bool) {
-        var frame = panel.frame
-        if open {
-            guard collapsedWidth == nil, frame.width < Self.previewWidth else { return }
-            collapsedWidth = frame.width
-            frame.size.width = Self.previewWidth
-        } else {
-            guard let width = collapsedWidth else { return }
-            collapsedWidth = nil
-            frame.size.width = width
+    /// Shows the Quick Look–style window beside the popup, moving the popup so both fit.
+    private func updatePreview(_ preview: ClipPreview?) {
+        guard let preview, panel.isVisible else {
+            previewer.hide()
+            if let origin = originBeforePreview, panel.isVisible { panel.setFrameOrigin(origin) }
+            originBeforePreview = nil
+            return
         }
-        frame.origin.x = panel.frame.midX - frame.width / 2
-        if let visible = panel.screen?.visibleFrame {
-            frame.size.width = min(frame.width, visible.width)
-            frame.origin.x = min(max(frame.minX, visible.minX), visible.maxX - frame.width)
-        }
-        panel.setFrame(frame, display: true, animate: panel.isVisible)
-        panel.invalidateShadow()
+        if originBeforePreview == nil { originBeforePreview = panel.frame.origin }
+        let popup = previewer.show(preview, beside: panel.frame, on: panel.screen)
+        if popup != panel.frame { panel.setFrame(popup, display: true) }
     }
 
     var isVisible: Bool { panel.isVisible }
@@ -148,12 +138,14 @@ final class PopupController: NSObject, NSWindowDelegate {
         viewModel.prepare(accessibilityGranted: Paster.isTrusted)
         position()
         panel.makeKeyAndOrderFront(nil)
-        panel.invalidateShadow()
         installKeyMonitor()
     }
 
     func close() {
         removeKeyMonitor()
+        previewer.hide()
+        originBeforePreview = nil
+        _ = viewModel.closePreview()
         panel.orderOut(nil)
     }
 
@@ -161,8 +153,8 @@ final class PopupController: NSObject, NSWindowDelegate {
         if isVisible { viewModel.reload() }
     }
 
-    func windowDidResize(_ notification: Notification) {
-        panel.invalidateShadow()
+    func windowDidEndLiveResize(_ notification: Notification) {
+        panel.setFrame(panel.frame.pixelAligned, display: true)
     }
 
     func windowDidResignKey(_ notification: Notification) {
@@ -174,8 +166,9 @@ final class PopupController: NSObject, NSWindowDelegate {
         let screen = NSScreen.screens.first { NSMouseInRect(mouse, $0.frame, false) } ?? NSScreen.main
         guard let visible = screen?.visibleFrame else { return }
         let size = panel.frame.size
-        let origin = NSPoint(x: visible.midX - size.width / 2, y: visible.minY + visible.height * 0.62 - size.height / 2)
-        panel.setFrameOrigin(origin)
+        let frame = NSRect(x: visible.midX - size.width / 2, y: visible.minY + visible.height * 0.62 - size.height / 2,
+                           width: size.width, height: size.height)
+        panel.setFrame(frame.pixelAligned, display: false)
     }
 
     private func installKeyMonitor() {
@@ -212,6 +205,12 @@ final class PopupController: NSObject, NSWindowDelegate {
         case 51 where mods == .command: viewModel.delete(); return true // ⌘⌫
         case 35 where mods == .command: viewModel.togglePin(); return true // ⌘P
         case 16 where mods == .command: viewModel.togglePreview(); return true // ⌘Y
+        // Space previews like Finder; with a search query it types a space instead.
+        case 49 where mods.isEmpty && (viewModel.query.isEmpty || previewer.isVisible):
+            viewModel.togglePreview(); return true
+        case 24 where previewer.isVisible && mods.subtracting(.shift) == .command: previewer.zoom(1); return true // ⌘+ / ⌘=
+        case 27 where previewer.isVisible && mods == .command: previewer.zoom(-1); return true // ⌘−
+        case 29 where previewer.isVisible && mods == .command: previewer.zoom(0); return true // ⌘0
         default: break
         }
         if flags.contains(.command), let ch = event.charactersIgnoringModifiers, let n = Int(ch), (1...9).contains(n) {

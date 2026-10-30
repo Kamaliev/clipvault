@@ -5,12 +5,8 @@ struct ClipPreview: Equatable {
     let id: Int64
     let text: String?
     let image: NSImage?
-    /// Label/value rows shown under the content.
-    let details: [(String, String)]
-
-    static func == (a: ClipPreview, b: ClipPreview) -> Bool {
-        a.id == b.id && a.text == b.text && a.image == b.image
-    }
+    let title: String
+    let subtitle: String
 }
 
 @MainActor
@@ -119,19 +115,19 @@ final class HistoryViewModel: ObservableObject {
         let item = items[selection]
         let image = ClipContent.image(reps)
         let text = image == nil ? ClipContent.plainText(reps).map { String($0.prefix(200_000)) } : nil
-        var details: [(String, String)] = [("Type", Self.kindName(item.kind))]
+        var title = Self.kindName(item.kind)
         if let image, let rep = image.representations.first {
-            details.append(("Dimensions", "\(rep.pixelsWide) × \(rep.pixelsHigh)"))
+            title += " — \(rep.pixelsWide) × \(rep.pixelsHigh)"
+        } else if let text {
+            title += " — \(text.count.formatted()) characters"
         }
-        if let text {
-            details.append(("Characters", text.count.formatted()))
-        }
-        details.append(("Size", ByteCountFormatter.string(fromByteCount: Int64(item.size), countStyle: .file)))
-        if let app = item.sourceApp { details.append(("Source", app)) }
-        details.append(("Copied", Date(timeIntervalSince1970: TimeInterval(item.createdAt))
-            .formatted(date: .abbreviated, time: .shortened)))
-        if item.pinned { details.append(("Pinned", "Yes")) }
-        preview = ClipPreview(id: id, text: text, image: image, details: details)
+        var subtitle = [ByteCountFormatter.string(fromByteCount: Int64(item.size), countStyle: .file)]
+        if let app = item.sourceApp { subtitle.append(app) }
+        subtitle.append(Date(timeIntervalSince1970: TimeInterval(item.createdAt))
+            .formatted(date: .abbreviated, time: .shortened))
+        if item.pinned { subtitle.append("Pinned") }
+        preview = ClipPreview(id: id, text: text, image: image, title: title,
+                              subtitle: subtitle.joined(separator: " · "))
     }
 
     private static func kindName(_ kind: ClipKind) -> String {
@@ -172,24 +168,17 @@ struct HistoryView: View {
 
             Divider().opacity(0.6)
 
-            HStack(spacing: 0) {
-                Group {
-                    if model.items.isEmpty {
-                        VStack {
-                            Spacer()
-                            Text(model.query.isEmpty ? "History is empty" : "No results")
-                                .foregroundStyle(.secondary)
-                            Spacer()
-                        }
-                        .frame(maxWidth: .infinity)
-                    } else {
-                        list
+            Group {
+                if model.items.isEmpty {
+                    VStack {
+                        Spacer()
+                        Text(model.query.isEmpty ? "History is empty" : "No results")
+                            .foregroundStyle(.secondary)
+                        Spacer()
                     }
-                }
-                .frame(width: model.preview == nil ? nil : 340)
-                if let preview = model.preview {
-                    Divider().opacity(0.6)
-                    PreviewPane(preview: preview)
+                    .frame(maxWidth: .infinity)
+                } else {
+                    list
                 }
             }
             .frame(maxHeight: .infinity)
@@ -197,11 +186,11 @@ struct HistoryView: View {
             Divider().opacity(0.6)
             HStack {
                 Text(model.preview == nil
-                     ? "⏎ paste · ⇧⏎ plain · ⌘⏎ copy · ⌥⏎ sequence · ⌘P pin · ⌘Y preview"
-                     : "↑↓ browse · ⏎ paste · ⌘Y or esc close preview")
+                     ? "⏎ paste · ⇧⏎ plain · ⌘⏎ copy · ⌥⏎ sequence · ⌘P pin · space preview"
+                     : "↑↓ browse · ⌘+ ⌘− ⌘0 zoom · space/esc close")
                     .lineLimit(1)
                     .truncationMode(.tail)
-                    .help("⏎ paste · ⇧⏎ paste as plain text · ⌘⏎ copy only · ⌥⏎ paste sequentially (then ⌥⇧⌘V) · ⌘P pin · ⌘Y preview · ⌘⌫ delete · ⌘1–9 paste n-th")
+                    .help("⏎ paste · ⇧⏎ paste as plain text · ⌘⏎ copy only · ⌥⏎ paste sequentially (then ⌥⇧⌘V) · ⌘P pin · space or ⌘Y preview (⌘+/⌘−/⌘0 zoom) · ⌘⌫ delete · ⌘1–9 paste n-th")
                 Spacer(minLength: 8)
                 if !model.accessibilityGranted {
                     Text("Copy only")
@@ -277,48 +266,6 @@ private struct GlassScrim: ViewModifier {
         #else
         content
         #endif
-    }
-}
-
-struct PreviewPane: View {
-    let preview: ClipPreview
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Group {
-                if let image = preview.image {
-                    Image(nsImage: image)
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .padding(16)
-                } else {
-                    ScrollView {
-                        Text(preview.text ?? "")
-                            .font(.system(size: 12, design: .monospaced))
-                            .textSelection(.enabled)
-                            .frame(maxWidth: .infinity, alignment: .topLeading)
-                            .padding(16)
-                    }
-                }
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-
-            Divider().opacity(0.6)
-            VStack(alignment: .leading, spacing: 4) {
-                ForEach(preview.details, id: \.0) { label, value in
-                    HStack(alignment: .firstTextBaseline) {
-                        Text(label).foregroundStyle(.secondary)
-                        Spacer(minLength: 12)
-                        Text(value).lineLimit(1).truncationMode(.middle)
-                    }
-                }
-            }
-            .font(.system(size: 11))
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
-        }
     }
 }
 

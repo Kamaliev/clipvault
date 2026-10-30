@@ -41,7 +41,7 @@ To build from source, see [Development](#development).
   (on-device Vision OCR, can be turned off in Settings).
 - Paste as plain text, copy without pasting, and paste a run of items one after another.
 - Pinned items stay on top and never expire.
-- Preview of the full text or image; links and colors (`#rrggbb`, `rgb()`) are recognized in the list.
+- Quick Look–style preview (Space, like Finder) with zoom for images and text; links and colors (`#rrggbb`, `rgb()`) are recognized in the list.
 - Translucent panel: Liquid Glass on macOS 26, vibrancy on macOS 14–15.
 - Per-record encryption (XChaCha20-Poly1305); master key in the Keychain.
 - Records expire after 24 hours unless pinned. Expired records are hidden immediately and securely deleted.
@@ -62,7 +62,8 @@ To build from source, see [Development](#development).
 | <kbd>⌥⏎</kbd> | Paste sequentially: pastes the record, then each <kbd>⌥⇧⌘V</kbd> pastes the next newer one |
 | <kbd>⌘1</kbd> … <kbd>⌘9</kbd> | Paste the n-th record |
 | <kbd>⌘P</kbd> | Pin or unpin |
-| <kbd>⌘Y</kbd> | Preview full text or image |
+| <kbd>Space</kbd> / <kbd>⌘Y</kbd> | Quick Look–style preview (Space types a space while searching) |
+| <kbd>⌘+</kbd> <kbd>⌘−</kbd> <kbd>⌘0</kbd> | Zoom the preview; ⌘0 or double-click toggles fit / actual size |
 | <kbd>⌘⌫</kbd> | Delete record |
 | <kbd>Esc</kbd> | Close preview, then the panel |
 

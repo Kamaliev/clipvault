@@ -11,7 +11,7 @@ the project uses [Semantic Versioning](https://semver.org/).
 - Pinned records: listed first and exempt from the 24-hour expiry (⌘P or context menu).
 - Paste as plain text (⇧⏎), copy without pasting (⌘⏎).
 - Paste sequentially (⌥⏎, then ⌥⇧⌘V for each next record).
-- Side-by-side preview of the full text or image with details (⌘Y); the popup widens while it is open.
+- Quick Look–style preview window beside the popup (Space or ⌘Y): zoom images with pinch, ⌘+/⌘−, ⌘0 or double-click (fit ↔ actual size); larger, zoomable text.
 - Text in copied images is recognized on device (Vision) and searchable; stored encrypted.
 - Links and colors are recognized in the list (link icon with host, color swatch).
 - Context menu on records; Settings › Clear All also removes pinned records.
@@ -20,6 +20,7 @@ the project uses [Semantic Versioning](https://semver.org/).
 
 - The history popup is now truly translucent: Liquid Glass on macOS 26, behind-window vibrancy on macOS 14–15.
 - Neutral row highlight and a light scrim over the glass for readability.
+- Sharper text: popup frames are aligned to whole points.
 - Borderless popup with cleanly clipped rounded corners and no dark outline (no dark edge pixels, no system shadow hairline).
 - Clear History keeps pinned records.
 - Database schema version 2 (adds the pinned flag); migrated automatically.
