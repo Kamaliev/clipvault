@@ -79,6 +79,9 @@ final class PopupController: NSObject, NSWindowDelegate {
     private var previousApp: NSRunningApplication?
     private let onAction: (ClipAction, Int64, NSRunningApplication?) -> Void
     private let onSequence: ([Int64], NSRunningApplication?) -> Void
+    /// Called when the popup is shown (`true`) or hidden (`false`).
+    var onVisibilityChange: ((Bool) -> Void)?
+    var onOpenSettings: (() -> Void)?
     private let previewer = PreviewController()
     private var previewObserver: AnyCancellable?
     /// Popup origin before it moved aside for the preview window.
@@ -138,6 +141,7 @@ final class PopupController: NSObject, NSWindowDelegate {
         viewModel.prepare(accessibilityGranted: Paster.isTrusted)
         position()
         panel.makeKeyAndOrderFront(nil)
+        onVisibilityChange?(true)
         installKeyMonitor()
     }
 
@@ -146,7 +150,9 @@ final class PopupController: NSObject, NSWindowDelegate {
         previewer.hide()
         originBeforePreview = nil
         _ = viewModel.closePreview()
+        let wasVisible = panel.isVisible
         panel.orderOut(nil)
+        if wasVisible { onVisibilityChange?(false) }
     }
 
     func refreshIfVisible() {
@@ -204,6 +210,10 @@ final class PopupController: NSObject, NSWindowDelegate {
             return true
         case 51 where mods == .command: viewModel.delete(); return true // ⌘⌫
         case 35 where mods == .command: viewModel.togglePin(); return true // ⌘P
+        case 43 where mods == .command: // ⌘,
+            close()
+            onOpenSettings?()
+            return true
         case 16 where mods == .command: viewModel.togglePreview(); return true // ⌘Y
         // Space previews like Finder; with a search query it types a space instead.
         case 49 where mods.isEmpty && (viewModel.query.isEmpty || previewer.isVisible):

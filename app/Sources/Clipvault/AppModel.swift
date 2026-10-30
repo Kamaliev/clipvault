@@ -20,6 +20,14 @@ final class AppModel: ObservableObject {
             monitor.recognizeText = recognizeText
         }
     }
+    /// Show the menu bar icon all the time instead of only while Clipvault is in use.
+    @Published var alwaysShowMenuBarIcon: Bool {
+        didSet {
+            UserDefaults.standard.set(alwaysShowMenuBarIcon, forKey: "alwaysShowMenuBarIcon")
+            updateMenuBarIcon()
+        }
+    }
+    @Published private(set) var menuBarIconVisible = true
     /// Items left in the active paste sequence (pasted one by one with ⌥⇧⌘V).
     @Published private(set) var sequenceRemaining = 0
     @Published private(set) var sequenceError: String?
@@ -53,6 +61,9 @@ final class AppModel: ObservableObject {
     private var settingsWindow: NSWindow?
     private var purgeTimer: Timer?
     private var started = false
+    private var popupVisible = false
+    private var menuTracking = false
+    private var hideIconWork: DispatchWorkItem?
 
     private init() {
         let (store, warning) = Self.openStore()
@@ -63,6 +74,9 @@ final class AppModel: ObservableObject {
         let recognize = UserDefaults.standard.object(forKey: "recognizeText") as? Bool ?? true
         recognizeText = recognize
         monitor.recognizeText = recognize
+        let always = UserDefaults.standard.bool(forKey: "alwaysShowMenuBarIcon")
+        alwaysShowMenuBarIcon = always
+        menuBarIconVisible = always
         if let data = UserDefaults.standard.data(forKey: "hotKey"),
            let spec = try? JSONDecoder().decode(HotKeySpec.self, from: data) {
             hotKey = spec
@@ -79,6 +93,20 @@ final class AppModel: ObservableObject {
             onAction: { [weak self] action, id, app in self?.perform(action, id: id, into: app) },
             onSequence: { [weak self] ids, app in self?.startSequence(ids, into: app) }
         )
+        popup?.onVisibilityChange = { [weak self] visible in
+            self?.popupVisible = visible
+            self?.updateMenuBarIcon()
+        }
+        popup?.onOpenSettings = { [weak self] in self?.openSettings() }
+        // Keep the icon while its menu is open, even if the popup closed meanwhile.
+        for (name, tracking) in [(NSMenu.didBeginTrackingNotification, true), (NSMenu.didEndTrackingNotification, false)] {
+            NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+                Task { @MainActor [weak self] in
+                    self?.menuTracking = tracking
+                    self?.updateMenuBarIcon()
+                }
+            }
+        }
         monitor.onAdded = { [weak self] in
             self?.refreshCount()
             self?.popup?.refreshIfVisible()
@@ -101,6 +129,29 @@ final class AppModel: ObservableObject {
         RunLoop.main.add(timer, forMode: .common)
         purgeTimer = timer
         purge()
+        // The icon is hidden by default, so show something on the very first launch.
+        if !UserDefaults.standard.bool(forKey: "didShowWelcome") {
+            UserDefaults.standard.set(true, forKey: "didShowWelcome")
+            openSettings()
+        }
+    }
+
+    /// The icon is shown while Clipvault is in use: popup, settings, menu or a paste sequence.
+    func updateMenuBarIcon() {
+        let inUse = alwaysShowMenuBarIcon || popupVisible || menuTracking || sequenceRemaining > 0
+            || settingsWindow?.isVisible == true
+        hideIconWork?.cancel()
+        hideIconWork = nil
+        if inUse {
+            menuBarIconVisible = true
+        } else if menuBarIconVisible {
+            // A short delay so a click on the icon right as the popup closes still opens its menu.
+            let work = DispatchWorkItem { [weak self] in
+                Task { @MainActor [weak self] in self?.menuBarIconVisible = false }
+            }
+            hideIconWork = work
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6, execute: work)
+        }
     }
 
     func togglePopup() {
@@ -139,6 +190,7 @@ final class AppModel: ObservableObject {
 
     private func updateSequence() {
         sequenceRemaining = sequence.count
+        updateMenuBarIcon()
         if sequence.isEmpty {
             nextHotKey?.unregister()
             sequenceError = nil
@@ -173,6 +225,13 @@ final class AppModel: ObservableObject {
             window.title = "Clipvault Settings"
             window.styleMask = [.titled, .closable]
             window.isReleasedWhenClosed = false
+            NotificationCenter.default.addObserver(forName: NSWindow.willCloseNotification, object: window, queue: .main) { [weak self] _ in
+                Task { @MainActor [weak self] in
+                    // isVisible is still true during willClose.
+                    self?.settingsWindow?.orderOut(nil)
+                    self?.updateMenuBarIcon()
+                }
+            }
             settingsWindow = window
         }
         refreshAccessibility()
@@ -181,6 +240,7 @@ final class AppModel: ObservableObject {
         settingsWindow?.center()
         NSApp.activate(ignoringOtherApps: true)
         settingsWindow?.makeKeyAndOrderFront(nil)
+        updateMenuBarIcon()
     }
 
     private func perform(_ action: ClipAction, id: Int64, into app: NSRunningApplication?) {

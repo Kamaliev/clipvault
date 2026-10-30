@@ -6,6 +6,11 @@ the project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- The menu bar icon is shown only while Clipvault is in use (popup, Settings, paste sequence); Settings › Menu bar icon › Always restores the old behavior.
+- Settings open with ⌘, in the popup, by launching Clipvault again, and on the first launch.
+
 ## [0.2.0] - 2026-10-30
 
 ### Added

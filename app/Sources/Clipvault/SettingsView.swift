@@ -20,6 +20,15 @@ struct SettingsView: View {
             }
             Toggle("Paste selected item automatically (⌘V)", isOn: $model.autoPaste)
             Toggle("Recognize text in images for search (on-device)", isOn: $model.recognizeText)
+            Picker("Menu bar icon", selection: $model.alwaysShowMenuBarIcon) {
+                Text("Only while in use").tag(false)
+                Text("Always").tag(true)
+            }
+            if !model.alwaysShowMenuBarIcon {
+                Text("Open Settings with ⌘, in the history popup or by launching Clipvault again.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
             Toggle("Launch at login", isOn: $model.launchAtLogin)
                 .disabled(!LaunchAtLogin.isAvailable)
             if let error = model.launchAtLoginError {
@@ -53,7 +62,7 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: 520)
+        .frame(width: 520, height: 560)
         .onDisappear { stopRecording() }
     }
 

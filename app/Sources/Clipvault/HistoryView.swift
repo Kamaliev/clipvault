@@ -190,7 +190,7 @@ struct HistoryView: View {
                      : "↑↓ browse · ⌘+ ⌘− ⌘0 zoom · space/esc close")
                     .lineLimit(1)
                     .truncationMode(.tail)
-                    .help("⏎ paste · ⇧⏎ paste as plain text · ⌘⏎ copy only · ⌥⏎ paste sequentially (then ⌥⇧⌘V) · ⌘P pin · space or ⌘Y preview (⌘+/⌘−/⌘0 zoom) · ⌘⌫ delete · ⌘1–9 paste n-th")
+                    .help("⏎ paste · ⇧⏎ paste as plain text · ⌘⏎ copy only · ⌥⏎ paste sequentially (then ⌥⇧⌘V) · ⌘P pin · space or ⌘Y preview (⌘+/⌘−/⌘0 zoom) · ⌘⌫ delete · ⌘1–9 paste n-th · ⌘, settings")
                 Spacer(minLength: 8)
                 if !model.accessibilityGranted {
                     Text("Copy only")

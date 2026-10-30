@@ -66,12 +66,16 @@ To build from source, see [Development](#development).
 | <kbd>⌘+</kbd> <kbd>⌘−</kbd> <kbd>⌘0</kbd> | Zoom the preview; ⌘0 or double-click toggles fit / actual size |
 | <kbd>⌘⌫</kbd> | Delete record |
 | <kbd>Esc</kbd> | Close preview, then the panel |
+| <kbd>⌘,</kbd> | Settings |
 
 Right-click a record for the same actions. Unpinning a record restarts its 24-hour lifetime.
 <kbd>⌥⇧⌘V</kbd> is registered only while a paste sequence is running.
 
 The menu-bar menu provides pause, auto-paste and launch-at-login toggles, the active paste sequence,
 clear history (pinned records are kept; Settings › Clear All removes them too) and Settings.
+By default the menu bar icon appears only while Clipvault is in use (popup, Settings or a paste
+sequence); choose "Always" in Settings to keep it. Open Settings with <kbd>⌘,</kbd> in the popup or by
+launching Clipvault again.
 
 The panel can also be toggled externally, for example from Shortcuts:
 

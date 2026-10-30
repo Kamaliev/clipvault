@@ -9,6 +9,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         ProcessInfo.processInfo.disableAutomaticTermination("clipboard monitoring")
         Task { @MainActor in AppModel.shared.start() }
     }
+
+    /// Launching Clipvault again (Spotlight, Finder) opens Settings: the menu bar icon may be hidden.
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        Task { @MainActor in AppModel.shared.openSettings() }
+        return false
+    }
 }
 
 @main
@@ -17,7 +23,8 @@ struct ClipvaultApp: App {
     @ObservedObject private var model = AppModel.shared
 
     var body: some Scene {
-        MenuBarExtra("Clipvault", systemImage: model.paused ? "clipboard" : "doc.on.clipboard") {
+        MenuBarExtra("Clipvault", systemImage: model.paused ? "clipboard" : "doc.on.clipboard",
+                     isInserted: Binding(get: { model.menuBarIconVisible }, set: { _ in })) {
             MenuContent(model: model)
         }
     }
