@@ -1,0 +1,30 @@
+# Optional Xcode project (xcodegen). The default build uses SwiftPM: see ../scripts/bundle-app.sh
+name: PbWindow
+options:
+  bundleIdPrefix: com.kamaliev
+  deploymentTarget:
+    macOS: "14.0"
+targets:
+  PbWindow:
+    type: application
+    platform: macOS
+    sources:
+      - Sources/PbWindow
+    preBuildScripts:
+      - name: Build Rust core
+        script: "\"${PROJECT_DIR}/../scripts/build-core.sh\""
+        basedOnDependencyAnalysis: false
+    settings:
+      base:
+        PRODUCT_NAME: PbWindow
+        PRODUCT_BUNDLE_IDENTIFIER: com.kamaliev.pb-window
+        INFOPLIST_FILE: Resources/Info.plist
+        SWIFT_VERSION: "5.0"
+        SWIFT_INCLUDE_PATHS: $(PROJECT_DIR)/Sources/PbCoreFFI
+        LIBRARY_SEARCH_PATHS: $(PROJECT_DIR)/../build/core
+        OTHER_LDFLAGS: ["-lpbcore"]
+        ENABLE_HARDENED_RUNTIME: YES
+        CODE_SIGN_IDENTITY: "-"
+    dependencies:
+      - sdk: Carbon.framework
+      - sdk: Security.framework

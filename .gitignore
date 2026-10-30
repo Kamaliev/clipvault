@@ -1,0 +1,8 @@
+/build/
+/core/target/
+/app/.build/
+/app/PbWindow.xcodeproj/
+/app/Sources/PbCoreFFI/pbcoreFFI.h
+/app/Sources/PbWindow/Generated/
+.DS_Store
+.swiftpm/
