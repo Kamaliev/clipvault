@@ -6,6 +6,8 @@ the project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-10-30
+
 ### Fixed
 
 - Releases are signed with a stable self-signed certificate instead of ad hoc, so the Accessibility grant survives updates (it has to be given once more after installing this version).
@@ -68,7 +70,8 @@ the project uses [Semantic Versioning](https://semver.org/).
 - Password-manager concealed/transient content is ignored.
 - Homebrew cask distribution via `Kamaliev/tap`.
 
-[Unreleased]: https://github.com/Kamaliev/clipvault/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/Kamaliev/clipvault/compare/v0.2.2...HEAD
+[0.2.2]: https://github.com/Kamaliev/clipvault/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/Kamaliev/clipvault/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/Kamaliev/clipvault/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/Kamaliev/clipvault/compare/v0.1.0...v0.1.1
