@@ -6,6 +6,8 @@ the project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-30
+
 ### Added
 
 - Passwords, tokens and keys are masked in the history and preview (`ghp_••••••3xY5`); ⌘R in the preview reveals them, pasting uses the full text. Detected: known token formats (GitHub, OpenAI, AWS, Slack, JWT, …), private keys, `password=`/`token:`-style values, passwords in URLs, `Bearer`/`Basic` credentials and records that look like a single password or token.
@@ -75,7 +77,8 @@ the project uses [Semantic Versioning](https://semver.org/).
 - Password-manager concealed/transient content is ignored.
 - Homebrew cask distribution via `Kamaliev/tap`.
 
-[Unreleased]: https://github.com/Kamaliev/clipvault/compare/v0.2.2...HEAD
+[Unreleased]: https://github.com/Kamaliev/clipvault/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/Kamaliev/clipvault/compare/v0.2.2...v0.3.0
 [0.2.2]: https://github.com/Kamaliev/clipvault/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/Kamaliev/clipvault/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/Kamaliev/clipvault/compare/v0.1.1...v0.2.0
