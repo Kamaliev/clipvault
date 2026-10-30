@@ -1,0 +1,30 @@
+[package]
+name = "pbcore"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+blake3 = "1.8.7"
+chacha20poly1305 = "0.11.0"
+getrandom = "0.4.3"
+hkdf = "0.13.0"
+rusqlite = { version = "0.41.1", features = ["bundled"] }
+sha2 = "0.11.1"
+thiserror = "2.0.21"
+uniffi = { version = "0.32", features = ["cli"] }
+zeroize = "1.9.1"
+
+[dev-dependencies]
+tempfile = "3.27.0"
+
+[lib]
+crate-type = ["lib", "staticlib"]
+
+[[bin]]
+name = "uniffi-bindgen"
+path = "uniffi-bindgen.rs"
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true

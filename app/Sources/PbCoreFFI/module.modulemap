@@ -1,0 +1,5 @@
+module pbcoreFFI {
+    header "pbcoreFFI.h"
+    link "pbcore"
+    export *
+}
