@@ -8,35 +8,35 @@ struct SettingsView: View {
 
     var body: some View {
         Form {
-            LabeledContent("Горячая клавиша") {
+            LabeledContent("Hotkey") {
                 HStack {
-                    Button(recording ? "Нажмите сочетание…" : model.hotKey.display) { toggleRecording() }
+                    Button(recording ? "Press a shortcut…" : model.hotKey.display) { toggleRecording() }
                         .frame(minWidth: 140)
-                    Button("Сбросить") { model.hotKey = .default }
+                    Button("Reset") { model.hotKey = .default }
                 }
             }
             if let error = model.hotKeyError {
                 Text(error).foregroundStyle(.red)
             }
-            Toggle("Автоматически вставлять выбранное (⌘V)", isOn: $model.autoPaste)
-            LabeledContent("Доступ Accessibility") {
+            Toggle("Paste selected item automatically (⌘V)", isOn: $model.autoPaste)
+            LabeledContent("Accessibility access") {
                 if model.accessibilityGranted {
-                    Text("разрешён").foregroundStyle(.green)
+                    Text("granted").foregroundStyle(.green)
                 } else {
-                    Button("Запросить…") { model.requestAccessibility() }
+                    Button("Request…") { model.requestAccessibility() }
                 }
             }
-            LabeledContent("Хранение") {
-                Text("24 часа, шифрование XChaCha20-Poly1305, ключ в Keychain")
+            LabeledContent("Storage") {
+                Text("24 hours, XChaCha20-Poly1305, key in Keychain")
                     .foregroundStyle(.secondary)
             }
             if let warning = model.storageWarning {
                 Text(warning).foregroundStyle(.orange)
             }
-            LabeledContent("Записей") {
+            LabeledContent("Items") {
                 HStack {
                     Text("\(model.entryCount)")
-                    Button("Очистить") { model.clearHistory() }
+                    Button("Clear") { model.clearHistory() }
                 }
             }
         }

@@ -22,7 +22,11 @@ pub fn detect_kind(reps: &[ClipRep]) -> ClipKind {
 
 /// Full plain text used for both preview and search.
 pub fn plain_text(kind: ClipKind, reps: &[ClipRep]) -> String {
-    let find = |u: &str| reps.iter().find(|r| r.uti == u).map(|r| String::from_utf8_lossy(&r.data));
+    let find = |u: &str| {
+        reps.iter()
+            .find(|r| r.uti == u)
+            .map(|r| String::from_utf8_lossy(&r.data))
+    };
     let text = match kind {
         ClipKind::Files => reps
             .iter()
@@ -69,7 +73,10 @@ fn truncate_chars(s: &str, n: usize) -> String {
 
 pub fn file_url_to_path(url: &str) -> String {
     let p = url.trim().trim_end_matches('\0');
-    let p = p.strip_prefix("file://localhost").or_else(|| p.strip_prefix("file://")).unwrap_or(p);
+    let p = p
+        .strip_prefix("file://localhost")
+        .or_else(|| p.strip_prefix("file://"))
+        .unwrap_or(p);
     percent_decode(p)
 }
 
@@ -78,12 +85,16 @@ fn percent_decode(s: &str) -> String {
     let mut out = Vec::with_capacity(b.len());
     let mut i = 0;
     while i < b.len() {
-        if b[i] == b'%' && i + 2 < b.len()
-            && let Some(v) = std::str::from_utf8(&b[i + 1..i + 3]).ok().and_then(|h| u8::from_str_radix(h, 16).ok()) {
-                out.push(v);
-                i += 3;
-                continue;
-            }
+        if b[i] == b'%'
+            && i + 2 < b.len()
+            && let Some(v) = std::str::from_utf8(&b[i + 1..i + 3])
+                .ok()
+                .and_then(|h| u8::from_str_radix(h, 16).ok())
+        {
+            out.push(v);
+            i += 3;
+            continue;
+        }
         out.push(b[i]);
         i += 1;
     }
@@ -93,8 +104,17 @@ fn percent_decode(s: &str) -> String {
 /// Minimal RTF → plain text: drops control words, groups like fonttbl/colortbl and `\*` destinations.
 pub fn rtf_to_text(rtf: &str) -> String {
     const SKIP_DEST: &[&str] = &[
-        "fonttbl", "colortbl", "stylesheet", "info", "pict", "expandedcolortbl", "listtable",
-        "listoverridetable", "header", "footer", "generator",
+        "fonttbl",
+        "colortbl",
+        "stylesheet",
+        "info",
+        "pict",
+        "expandedcolortbl",
+        "listtable",
+        "listoverridetable",
+        "header",
+        "footer",
+        "generator",
     ];
     let mut out = String::new();
     let chars: Vec<char> = rtf.chars().collect();
@@ -159,7 +179,10 @@ pub fn rtf_to_text(rtf: &str) -> String {
                                 }
                                 let mut k = 0;
                                 while k < uc_skip.max(1) && i < chars.len() {
-                                    if chars[i] == '\\' && i + 1 < chars.len() && chars[i + 1] == '\'' {
+                                    if chars[i] == '\\'
+                                        && i + 1 < chars.len()
+                                        && chars[i + 1] == '\''
+                                    {
                                         i += 4;
                                     } else {
                                         i += 1;
@@ -171,12 +194,14 @@ pub fn rtf_to_text(rtf: &str) -> String {
                         _ => {}
                     }
                 } else if c == '\'' {
-                    let hex: String = chars.get(i + 1..i + 3).map(|s| s.iter().collect()).unwrap_or_default();
+                    let hex: String = chars
+                        .get(i + 1..i + 3)
+                        .map(|s| s.iter().collect())
+                        .unwrap_or_default();
                     i += 3;
-                    if !skipping
-                        && let Ok(v) = u8::from_str_radix(&hex, 16) {
-                            out.push(cp1252(v));
-                        }
+                    if !skipping && let Ok(v) = u8::from_str_radix(&hex, 16) {
+                        out.push(cp1252(v));
+                    }
                 } else if c == '*' {
                     if let Some(top) = stack.last_mut() {
                         *top = true;
@@ -208,8 +233,9 @@ pub fn rtf_to_text(rtf: &str) -> String {
 
 fn cp1252(b: u8) -> char {
     const HI: [char; 32] = [
-        '€', '\u{81}', '‚', 'ƒ', '„', '…', '†', '‡', 'ˆ', '‰', 'Š', '‹', 'Œ', '\u{8d}', 'Ž', '\u{8f}',
-        '\u{90}', '‘', '’', '“', '”', '•', '–', '—', '˜', '™', 'š', '›', 'œ', '\u{9d}', 'ž', 'Ÿ',
+        '€', '\u{81}', '‚', 'ƒ', '„', '…', '†', '‡', 'ˆ', '‰', 'Š', '‹', 'Œ', '\u{8d}', 'Ž',
+        '\u{8f}', '\u{90}', '‘', '’', '“', '”', '•', '–', '—', '˜', '™', 'š', '›', 'œ', '\u{9d}',
+        'ž', 'Ÿ',
     ];
     if (0x80..0xa0).contains(&b) {
         HI[(b - 0x80) as usize]
@@ -231,13 +257,22 @@ pub fn html_to_text(html: &str) -> String {
                 None => break,
             };
             let tag = lower[i + 1..end - 1].trim_start_matches('/');
-            let name: String = tag.chars().take_while(|c| c.is_ascii_alphanumeric()).collect();
+            let name: String = tag
+                .chars()
+                .take_while(|c| c.is_ascii_alphanumeric())
+                .collect();
             if !lower[i + 1..].starts_with('/') && (name == "script" || name == "style") {
                 let close = format!("</{name}");
-                i = lower[end..].find(&close).map(|p| end + p).unwrap_or(html.len());
+                i = lower[end..]
+                    .find(&close)
+                    .map(|p| end + p)
+                    .unwrap_or(html.len());
                 continue;
             }
-            if matches!(name.as_str(), "br" | "p" | "div" | "li" | "tr" | "h1" | "h2" | "h3" | "h4" | "h5" | "h6") {
+            if matches!(
+                name.as_str(),
+                "br" | "p" | "div" | "li" | "tr" | "h1" | "h2" | "h3" | "h4" | "h5" | "h6"
+            ) {
                 out.push('\n');
             }
             i = end;
@@ -245,11 +280,12 @@ pub fn html_to_text(html: &str) -> String {
             let rest = &html[i..];
             let semi = rest.find(';').filter(|&p| p <= 10);
             if let Some(p) = semi
-                && let Some(ch) = decode_entity(&rest[1..p]) {
-                    out.push(ch);
-                    i += p + 1;
-                    continue;
-                }
+                && let Some(ch) = decode_entity(&rest[1..p])
+            {
+                out.push(ch);
+                i += p + 1;
+                continue;
+            }
             out.push('&');
             i += 1;
         } else {
@@ -285,15 +321,28 @@ mod tests {
     use super::*;
 
     fn rep(uti: &str, data: &[u8]) -> ClipRep {
-        ClipRep { item: 0, uti: uti.into(), data: data.to_vec() }
+        ClipRep {
+            item: 0,
+            uti: uti.into(),
+            data: data.to_vec(),
+        }
     }
 
     #[test]
     fn kind_priority() {
-        assert_eq!(detect_kind(&[rep(UTI_TEXT, b"a"), rep("public.png", b"x")]), ClipKind::Text);
+        assert_eq!(
+            detect_kind(&[rep(UTI_TEXT, b"a"), rep("public.png", b"x")]),
+            ClipKind::Text
+        );
         assert_eq!(detect_kind(&[rep("public.tiff", b"x")]), ClipKind::Image);
-        assert_eq!(detect_kind(&[rep(UTI_HTML, b"a"), rep(UTI_TEXT, b"a")]), ClipKind::Html);
-        assert_eq!(detect_kind(&[rep(UTI_FILE_URL, b"file:///a"), rep(UTI_TEXT, b"a")]), ClipKind::Files);
+        assert_eq!(
+            detect_kind(&[rep(UTI_HTML, b"a"), rep(UTI_TEXT, b"a")]),
+            ClipKind::Html
+        );
+        assert_eq!(
+            detect_kind(&[rep(UTI_FILE_URL, b"file:///a"), rep(UTI_TEXT, b"a")]),
+            ClipKind::Files
+        );
     }
 
     #[test]
@@ -310,14 +359,23 @@ mod tests {
 
     #[test]
     fn file_urls_decoded() {
-        let reps = [rep(UTI_FILE_URL, b"file:///Users/me/My%20File.txt"), rep(UTI_FILE_URL, b"file:///tmp/%D0%AF")];
-        assert_eq!(plain_text(ClipKind::Files, &reps), "/Users/me/My File.txt\n/tmp/Я");
+        let reps = [
+            rep(UTI_FILE_URL, b"file:///Users/me/My%20File.txt"),
+            rep(UTI_FILE_URL, b"file:///tmp/%D0%AF"),
+        ];
+        assert_eq!(
+            plain_text(ClipKind::Files, &reps),
+            "/Users/me/My File.txt\n/tmp/Я"
+        );
     }
 
     #[test]
     fn preview_collapses_and_truncates() {
         assert_eq!(make_preview("  a\n\n b\tc "), "a b c");
-        assert_eq!(make_preview(&"я".repeat(1000)).chars().count(), PREVIEW_CHARS);
+        assert_eq!(
+            make_preview(&"я".repeat(1000)).chars().count(),
+            PREVIEW_CHARS
+        );
     }
 
     #[test]

@@ -94,7 +94,7 @@ final class AppModel: ObservableObject {
     func openSettings() {
         if settingsWindow == nil {
             let window = NSWindow(contentViewController: NSHostingController(rootView: SettingsView(model: self)))
-            window.title = "Clipvault — настройки"
+            window.title = "Clipvault Settings"
             window.styleMask = [.titled, .closable]
             window.isReleasedWhenClosed = false
             settingsWindow = window
@@ -139,7 +139,7 @@ final class AppModel: ObservableObject {
 
     private func registerHotKey() {
         guard let hotKeyManager else { return }
-        hotKeyError = hotKeyManager.register(hotKey) ? nil : "Не удалось зарегистрировать \(hotKey.display) — сочетание занято"
+        hotKeyError = hotKeyManager.register(hotKey) ? nil : "Could not register \(hotKey.display): shortcut is already in use"
     }
 
     private func saveHotKey() {
@@ -171,7 +171,7 @@ final class AppModel: ObservableObject {
             let key = (try? KeychainKey.randomKey()) ?? Data((0..<32).map { _ in UInt8.random(in: 0...255) })
             // swiftlint:disable:next force_try
             let store = try! Store.open(path: ":memory:", key: key, ttlSecs: ttl, maxBytes: max)
-            return (store, "История хранится только в памяти: \(error)")
+            return (store, "History is kept in memory only: \(error)")
         }
     }
 }

@@ -27,20 +27,20 @@ struct MenuContent: View {
     @ObservedObject var model: AppModel
 
     var body: some View {
-        Button("Показать историю (\(model.hotKey.display))") { model.togglePopup() }
+        Button("Show History (\(model.hotKey.display))") { model.togglePopup() }
         Divider()
-        Toggle("Пауза записи", isOn: $model.paused)
-        Toggle("Автовставка", isOn: $model.autoPaste)
+        Toggle("Pause Recording", isOn: $model.paused)
+        Toggle("Auto-Paste", isOn: $model.autoPaste)
         if !model.accessibilityGranted {
-            Button("Разрешить автовставку (Accessibility)…") { model.requestAccessibility() }
+            Button("Enable Auto-Paste (Accessibility)…") { model.requestAccessibility() }
         }
         if let warning = model.storageWarning {
             Text(warning)
         }
         Divider()
-        Button("Очистить историю") { model.clearHistory() }
-        Button("Настройки…") { model.openSettings() }.keyboardShortcut(",")
+        Button("Clear History") { model.clearHistory() }
+        Button("Settings…") { model.openSettings() }.keyboardShortcut(",")
         Divider()
-        Button("Выход") { NSApp.terminate(nil) }.keyboardShortcut("q")
+        Button("Quit") { NSApp.terminate(nil) }.keyboardShortcut("q")
     }
 }
