@@ -130,9 +130,11 @@ core/                 Rust crate clipvault-core
 app/                  Swift package (plus project.yml for xcodegen)
   Sources/Clipvault/
   Resources/Info.plist
+  Resources/AppIcon.icns
 scripts/
   build-core.sh       cargo build → .a + Swift bindings
   bundle-app.sh       swift build → Clipvault.app + codesign
+  make-icon.swift     draws Resources/AppIcon.icns (swift scripts/make-icon.swift)
 ```
 
 ## Development

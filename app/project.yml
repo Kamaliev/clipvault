@@ -10,6 +10,7 @@ targets:
     platform: macOS
     sources:
       - Sources/Clipvault
+      - Resources/AppIcon.icns
     preBuildScripts:
       - name: Build Rust core
         script: "\"${PROJECT_DIR}/../scripts/build-core.sh\""

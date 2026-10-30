@@ -31,6 +31,7 @@ else
   cp "${bins[0]}" "$APP/Contents/MacOS/Clipvault"
 fi
 cp "$ROOT/app/Resources/Info.plist" "$PLIST"
+cp "$ROOT/app/Resources/AppIcon.icns" "$APP/Contents/Resources/"
 if [ -n "${VERSION:-}" ]; then
   /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString ${VERSION#v}" "$PLIST"
   /usr/libexec/PlistBuddy -c "Set :CFBundleVersion ${VERSION#v}" "$PLIST"

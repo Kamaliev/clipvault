@@ -6,6 +6,10 @@ the project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- App icon (drawn by `scripts/make-icon.swift`).
+
 ### Changed
 
 - The menu bar icon is shown only while Clipvault is in use (popup, Settings, paste sequence); Settings › Menu bar icon › Always restores the old behavior.
