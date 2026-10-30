@@ -44,6 +44,11 @@ struct SettingsView: View {
                     Button("Request…") { model.requestAccessibility() }
                 }
             }
+            if !model.accessibilityGranted {
+                Text("If Clipvault is already switched on in System Settings, remove it with − and request again.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
             LabeledContent("Storage") {
                 Text("24 hours (pinned kept), XChaCha20-Poly1305, key in Keychain")
                     .foregroundStyle(.secondary)
@@ -62,7 +67,7 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: 520, height: 560)
+        .frame(width: 520, height: 440)
         .onDisappear { stopRecording() }
     }
 

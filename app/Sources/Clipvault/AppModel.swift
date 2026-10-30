@@ -107,6 +107,20 @@ final class AppModel: ObservableObject {
         ) { [weak self] _ in
             Task { @MainActor [weak self] in self?.togglePopup() }
         }
+        // Posted when the Accessibility list changes; the new state is readable a moment later.
+        DistributedNotificationCenter.default().addObserver(
+            forName: .init("com.apple.accessibility.api"), object: nil, queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                try? await Task.sleep(for: .milliseconds(500))
+                self?.refreshAccessibility()
+            }
+        }
+        NotificationCenter.default.addObserver(
+            forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in self?.refreshAccessibility() }
+        }
 
         Task.detached(priority: .userInitiated) {
             let (store, warning) = Self.openStore()
@@ -240,6 +254,11 @@ final class AppModel: ObservableObject {
     func requestAccessibility() {
         Paster.requestAccessibility()
         refreshAccessibility()
+        // The prompt does not appear while an outdated Clipvault entry is still in the list.
+        if !accessibilityGranted,
+           let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
+            NSWorkspace.shared.open(url)
+        }
     }
 
     func openSettings() {

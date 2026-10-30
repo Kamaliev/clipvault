@@ -22,8 +22,31 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: core
+      - name: Import signing certificate
+        # A stable self-signed identity keeps the Accessibility grant across updates;
+        # ad-hoc signatures change with every build.
+        env:
+          CERT_P12: ${{ secrets.SIGNING_CERT_P12 }}
+          CERT_PASSWORD: ${{ secrets.SIGNING_CERT_PASSWORD }}
+        if: ${{ env.CERT_P12 != '' }}
+        run: |
+          kc="$RUNNER_TEMP/signing.keychain-db"
+          kc_pw="$(openssl rand -hex 16)"
+          printf '%s' "$CERT_P12" | base64 -d > "$RUNNER_TEMP/cert.p12"
+          security create-keychain -p "$kc_pw" "$kc"
+          security set-keychain-settings "$kc"
+          security unlock-keychain -p "$kc_pw" "$kc"
+          security import "$RUNNER_TEMP/cert.p12" -k "$kc" -P "$CERT_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -k "$kc_pw" "$kc" > /dev/null
+          security list-keychains -d user -s "$kc" $(security list-keychains -d user | tr -d '"')
+          rm "$RUNNER_TEMP/cert.p12"
+          # The certificate is not trusted, so codesign finds it only by its SHA-1.
+          identity="$(security find-identity -p codesigning "$kc" | awk '/Clipvault Self-Signed/ {print $2; exit}')"
+          echo "SIGN_IDENTITY=$identity" >> "$GITHUB_ENV"
       - name: Build universal app
         run: make dist VERSION=${{ github.ref_name }}
+      - name: Check signature
+        run: codesign -d -r- build/Clipvault.app
       - name: Publish GitHub release
         env:
           GH_TOKEN: ${{ github.token }}

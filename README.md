@@ -19,7 +19,7 @@ Requires macOS 14 or later (Apple silicon and Intel).
 brew install --cask Kamaliev/tap/clipvault
 ```
 
-Releases are signed ad hoc, not notarized. The cask removes the quarantine attribute on install;
+Releases are signed with a self-signed certificate and are not notarized. The cask removes the quarantine attribute on install;
 if you download the archive manually, run `xattr -dr com.apple.quarantine /Applications/Clipvault.app`.
 
 To build from source, see [Development](#development).
@@ -31,12 +31,13 @@ To build from source, see [Development](#development).
 | Accessibility | Send <kbd>⌘V</kbd> to the frontmost application (auto-paste) | The record is copied to the pasteboard; paste manually |
 | Keychain | Store the encryption key | History is kept in memory only until the next launch |
 
-Releases are signed ad hoc, so after each install or update macOS asks once whether Clipvault may use
-its Keychain item. Choose **Always Allow**; with **Allow** the question returns on every launch.
+The certificate keeps the Accessibility grant across updates. The Keychain still identifies
+non-Apple-signed apps by build, so after each install or update macOS asks once whether Clipvault may
+use its Keychain item. Choose **Always Allow**; with **Allow** the question returns on every launch.
 The hotkey works while the question is shown, and the history opens as soon as it is answered.
-The Accessibility grant is tied to the signature too: if <kbd>⏎</kbd> only copies after an update
-(the popup shows **Copy only**), remove Clipvault from System Settings › Privacy & Security ›
-Accessibility and press <kbd>⏎</kbd> again — Clipvault asks for the permission once per launch.
+If <kbd>⏎</kbd> only copies (the popup shows **Copy only**) although Clipvault is switched on in
+System Settings › Privacy & Security › Accessibility, the entry belongs to an older signature:
+remove it with − and press <kbd>⏎</kbd> again. Versions up to 0.2.1 were signed ad hoc and need this once.
 
 ## Features
 
@@ -159,6 +160,8 @@ make xcode      # generate app/Clipvault.xcodeproj (requires xcodegen and Xcode)
 
 Ad-hoc signatures change on every rebuild, so macOS may re-prompt for Keychain access and reset the
 Accessibility grant. Sign with a stable identity to avoid this: `SIGN_IDENTITY="Apple Development: …" make app`.
+Releases use a self-signed certificate from the `SIGNING_CERT_P12` and `SIGNING_CERT_PASSWORD` secrets;
+an untrusted certificate must be passed to `SIGN_IDENTITY` by its SHA-1 hash.
 
 ### Releasing
 

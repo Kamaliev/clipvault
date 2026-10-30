@@ -6,6 +6,12 @@ the project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- Releases are signed with a stable self-signed certificate instead of ad hoc, so the Accessibility grant survives updates (it has to be given once more after installing this version).
+- Settings show the Accessibility state as soon as it changes in System Settings; Request… also opens the Accessibility pane.
+- The Settings window no longer has empty space at the bottom.
+
 ## [0.2.1] - 2026-10-30
 
 ### Added
