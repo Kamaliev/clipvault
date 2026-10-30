@@ -49,6 +49,7 @@ final class AppModel: ObservableObject {
     }
     @Published private(set) var launchAtLoginError: String?
     @Published private(set) var accessibilityGranted = Paster.isTrusted
+    private var askedForAccessibility = false
     @Published private(set) var storageWarning: String?
     @Published private(set) var entryCount: UInt32 = 0
 
@@ -287,7 +288,15 @@ final class AppModel: ObservableObject {
     /// Sends ⌘V to `app` (or the frontmost app when `nil`) if auto-paste is enabled and allowed.
     private func sendPaste(into app: NSRunningApplication?) {
         refreshAccessibility()
-        guard autoPaste, accessibilityGranted else { return }
+        guard autoPaste else { return }
+        guard accessibilityGranted else {
+            // The grant is tied to the code signature, so updates silently revoke it; ask once per launch.
+            if !askedForAccessibility {
+                askedForAccessibility = true
+                Paster.requestAccessibility()
+            }
+            return
+        }
         var delay = 0.05
         if let app, NSApp.isActive || NSWorkspace.shared.frontmostApplication != app {
             app.activate()

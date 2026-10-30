@@ -196,7 +196,7 @@ struct HistoryView: View {
                     Text("Copy only")
                         .lineLimit(1)
                         .foregroundStyle(.orange)
-                        .help("No Accessibility access. Grant it from the Clipvault menu to enable auto-paste")
+                        .help("No Accessibility access. Grant it in System Settings › Privacy & Security › Accessibility; after an update remove the old Clipvault entry and add it again")
                 }
             }
             .font(.system(size: 11))

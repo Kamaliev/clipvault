@@ -15,6 +15,7 @@ the project uses [Semantic Versioning](https://semver.org/).
 
 - Launch no longer blocks while macOS asks for Keychain access: the hotkey and menu work at once, and a popup requested meanwhile opens as soon as the history is unlocked.
 - The Settings window opened collapsed to its title bar.
+- When Accessibility access is missing (macOS revokes it after an update), pressing ⏎ asks for it instead of silently copying only.
 
 ## [0.2.0] - 2026-10-30
 
