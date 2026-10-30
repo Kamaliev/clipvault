@@ -6,6 +6,8 @@ the project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-30
+
 ### Added
 
 - Pinned records: listed first and exempt from the 24-hour expiry (⌘P or context menu).
@@ -43,6 +45,7 @@ the project uses [Semantic Versioning](https://semver.org/).
 - Password-manager concealed/transient content is ignored.
 - Homebrew cask distribution via `Kamaliev/tap`.
 
-[Unreleased]: https://github.com/Kamaliev/clipvault/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/Kamaliev/clipvault/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/Kamaliev/clipvault/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/Kamaliev/clipvault/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/Kamaliev/clipvault/releases/tag/v0.1.0
