@@ -154,7 +154,7 @@ Accessibility grant. Sign with a stable identity to avoid this: `SIGN_IDENTITY="
 ### Releasing
 
 Push a tag `vX.Y.Z`. The release workflow builds a universal binary, publishes it to GitHub Releases
-and, if the `HOMEBREW_TAP_TOKEN` secret is set, updates the cask in `Kamaliev/homebrew-tap`.
+and, if the `HOMEBREW_TAP_DEPLOY_KEY` secret (a write deploy key of the tap) is set, updates the cask in `Kamaliev/homebrew-tap`.
 
 ## Limitations
 

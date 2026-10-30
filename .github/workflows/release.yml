@@ -12,7 +12,8 @@ jobs:
     name: Build and publish
     runs-on: macos-26
     env:
-      TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+      # Deploy key with write access to the homebrew-tap repository only.
+      TAP_DEPLOY_KEY: ${{ secrets.HOMEBREW_TAP_DEPLOY_KEY }}
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -30,11 +31,15 @@ jobs:
           gh release create "${{ github.ref_name }}" build/Clipvault-*.zip \
             --title "${{ github.ref_name }}" --generate-notes
       - name: Update Homebrew tap
-        if: ${{ env.TAP_TOKEN != '' }}
+        if: ${{ env.TAP_DEPLOY_KEY != '' }}
         run: |
           version="${GITHUB_REF_NAME#v}"
           sha="$(shasum -a 256 "build/Clipvault-${version}.zip" | cut -d' ' -f1)"
-          git clone "https://x-access-token:${TAP_TOKEN}@github.com/${GITHUB_REPOSITORY_OWNER}/homebrew-tap.git" tap
+          key="$RUNNER_TEMP/tap_key"
+          printf '%s\n' "$TAP_DEPLOY_KEY" > "$key"
+          chmod 600 "$key"
+          export GIT_SSH_COMMAND="ssh -i $key -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new"
+          git clone "git@github.com:${GITHUB_REPOSITORY_OWNER}/homebrew-tap.git" tap
           cd tap
           sed -i '' -e "s/^  version \".*\"/  version \"${version}\"/" \
                     -e "s/^  sha256 \".*\"/  sha256 \"${sha}\"/" Casks/clipvault.rb
