@@ -5,6 +5,12 @@ struct ClipPreview: Equatable {
     let id: Int64
     let text: String?
     let image: NSImage?
+    /// Label/value rows shown under the content.
+    let details: [(String, String)]
+
+    static func == (a: ClipPreview, b: ClipPreview) -> Bool {
+        a.id == b.id && a.text == b.text && a.image == b.image
+    }
 }
 
 @MainActor
@@ -110,9 +116,32 @@ final class HistoryViewModel: ObservableObject {
         guard items.indices.contains(selection) else { preview = nil; return }
         let id = items[selection].id
         guard let reps = try? store.get(id: id) else { preview = nil; return }
+        let item = items[selection]
         let image = ClipContent.image(reps)
         let text = image == nil ? ClipContent.plainText(reps).map { String($0.prefix(200_000)) } : nil
-        preview = ClipPreview(id: id, text: text, image: image)
+        var details: [(String, String)] = [("Type", Self.kindName(item.kind))]
+        if let image, let rep = image.representations.first {
+            details.append(("Dimensions", "\(rep.pixelsWide) × \(rep.pixelsHigh)"))
+        }
+        if let text {
+            details.append(("Characters", text.count.formatted()))
+        }
+        details.append(("Size", ByteCountFormatter.string(fromByteCount: Int64(item.size), countStyle: .file)))
+        if let app = item.sourceApp { details.append(("Source", app)) }
+        details.append(("Copied", Date(timeIntervalSince1970: TimeInterval(item.createdAt))
+            .formatted(date: .abbreviated, time: .shortened)))
+        if item.pinned { details.append(("Pinned", "Yes")) }
+        preview = ClipPreview(id: id, text: text, image: image, details: details)
+    }
+
+    private static func kindName(_ kind: ClipKind) -> String {
+        switch kind {
+        case .text: "Text"
+        case .rtf: "Rich text"
+        case .html: "HTML"
+        case .image: "Image"
+        case .files: "Files"
+        }
     }
 
     func thumbnail(for item: ClipSummary) -> NSImage? {
@@ -139,27 +168,37 @@ struct HistoryView: View {
                     .focused($searchFocused)
             }
             .padding(.horizontal, 16)
-            .padding(.top, 30)
-            .padding(.bottom, 10)
+            .padding(.vertical, 14)
 
             Divider().opacity(0.6)
 
-            if let preview = model.preview {
-                PreviewPane(preview: preview)
-            } else if model.items.isEmpty {
-                Spacer()
-                Text(model.query.isEmpty ? "History is empty" : "No results")
-                    .foregroundStyle(.secondary)
-                Spacer()
-            } else {
-                list
+            HStack(spacing: 0) {
+                Group {
+                    if model.items.isEmpty {
+                        VStack {
+                            Spacer()
+                            Text(model.query.isEmpty ? "History is empty" : "No results")
+                                .foregroundStyle(.secondary)
+                            Spacer()
+                        }
+                        .frame(maxWidth: .infinity)
+                    } else {
+                        list
+                    }
+                }
+                .frame(width: model.preview == nil ? nil : 340)
+                if let preview = model.preview {
+                    Divider().opacity(0.6)
+                    PreviewPane(preview: preview)
+                }
             }
+            .frame(maxHeight: .infinity)
 
             Divider().opacity(0.6)
             HStack {
                 Text(model.preview == nil
                      ? "⏎ paste · ⇧⏎ plain · ⌘⏎ copy · ⌥⏎ sequence · ⌘P pin · ⌘Y preview"
-                     : "⌘Y or esc close preview · ↑↓ next · ⏎ paste")
+                     : "↑↓ browse · ⏎ paste · ⌘Y or esc close preview")
                     .lineLimit(1)
                     .truncationMode(.tail)
                     .help("⏎ paste · ⇧⏎ paste as plain text · ⌘⏎ copy only · ⌥⏎ paste sequentially (then ⌥⇧⌘V) · ⌘P pin · ⌘Y preview · ⌘⌫ delete · ⌘1–9 paste n-th")
@@ -177,6 +216,8 @@ struct HistoryView: View {
             .padding(.vertical, 7)
         }
         .modifier(GlassScrim())
+        // Everything, including the scrim, must follow the glass corners.
+        .clipShape(RoundedRectangle(cornerRadius: PopupPanel.cornerRadius, style: .continuous))
         .onChange(of: model.focusToken) { _, _ in searchFocused = true }
         .onAppear { searchFocused = true }
     }
@@ -243,24 +284,41 @@ struct PreviewPane: View {
     let preview: ClipPreview
 
     var body: some View {
-        Group {
-            if let image = preview.image {
-                Image(nsImage: image)
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .padding(12)
-            } else {
-                ScrollView {
-                    Text(preview.text ?? "")
-                        .font(.system(size: 13, design: .monospaced))
-                        .textSelection(.enabled)
-                        .frame(maxWidth: .infinity, alignment: .topLeading)
-                        .padding(14)
+        VStack(alignment: .leading, spacing: 0) {
+            Group {
+                if let image = preview.image {
+                    Image(nsImage: image)
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .padding(16)
+                } else {
+                    ScrollView {
+                        Text(preview.text ?? "")
+                            .font(.system(size: 12, design: .monospaced))
+                            .textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .topLeading)
+                            .padding(16)
+                    }
                 }
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+            Divider().opacity(0.6)
+            VStack(alignment: .leading, spacing: 4) {
+                ForEach(preview.details, id: \.0) { label, value in
+                    HStack(alignment: .firstTextBaseline) {
+                        Text(label).foregroundStyle(.secondary)
+                        Spacer(minLength: 12)
+                        Text(value).lineLimit(1).truncationMode(.middle)
+                    }
+                }
+            }
+            .font(.system(size: 11))
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
         }
-        .frame(maxHeight: .infinity)
     }
 }
 

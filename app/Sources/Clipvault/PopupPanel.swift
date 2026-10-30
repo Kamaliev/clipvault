@@ -1,27 +1,26 @@
 import AppKit
+import Combine
 import SwiftUI
 
 /// Non-activating floating panel: it takes keyboard focus without activating our app,
 /// so the previously active app stays frontmost and receives the ⌘V.
 final class PopupPanel: NSPanel {
+    nonisolated static let cornerRadius: CGFloat = 18
+
     init() {
         super.init(
             contentRect: NSRect(x: 0, y: 0, width: 560, height: 460),
-            styleMask: [.nonactivatingPanel, .titled, .fullSizeContentView, .resizable],
+            // Borderless: no system frame, so only our glass defines the rounded corners.
+            styleMask: [.nonactivatingPanel, .borderless, .resizable],
             backing: .buffered,
             defer: true
         )
-        titleVisibility = .hidden
-        titlebarAppearsTransparent = true
         isMovableByWindowBackground = true
         isFloatingPanel = true
         level = .popUpMenu
         hidesOnDeactivate = false
         isReleasedWhenClosed = false
         collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .transient]
-        standardWindowButton(.closeButton)?.isHidden = true
-        standardWindowButton(.miniaturizeButton)?.isHidden = true
-        standardWindowButton(.zoomButton)?.isHidden = true
         minSize = NSSize(width: 380, height: 260)
         isOpaque = false
         backgroundColor = .clear
@@ -35,7 +34,7 @@ final class PopupPanel: NSPanel {
 /// Translucent backdrop showing what is behind the window: Liquid Glass on macOS 26+,
 /// classic behind-window vibrancy on older systems.
 @MainActor
-func makeGlassContainer(hosting content: NSView, cornerRadius: CGFloat = 24) -> NSView {
+func makeGlassContainer(hosting content: NSView, cornerRadius: CGFloat = PopupPanel.cornerRadius) -> NSView {
     #if compiler(>=6.2)
     if #available(macOS 26, *) {
         let glass = NSGlassEffectView()
@@ -50,10 +49,16 @@ func makeGlassContainer(hosting content: NSView, cornerRadius: CGFloat = 24) -> 
     effect.blendingMode = .behindWindow
     // The panel never activates the app, so force the active look instead of the grey inactive one.
     effect.state = .active
-    effect.wantsLayer = true
-    effect.layer?.cornerRadius = cornerRadius
-    effect.layer?.cornerCurve = .continuous
-    effect.layer?.masksToBounds = true
+    // A layer corner radius does not clip behind-window blur; a stretchable mask image does.
+    let side = cornerRadius * 2 + 1
+    let mask = NSImage(size: NSSize(width: side, height: side), flipped: false) { rect in
+        NSColor.black.setFill()
+        NSBezierPath(roundedRect: rect, xRadius: cornerRadius, yRadius: cornerRadius).fill()
+        return true
+    }
+    mask.capInsets = NSEdgeInsets(top: cornerRadius, left: cornerRadius, bottom: cornerRadius, right: cornerRadius)
+    mask.resizingMode = .stretch
+    effect.maskImage = mask
     content.translatesAutoresizingMaskIntoConstraints = false
     effect.addSubview(content)
     NSLayoutConstraint.activate([
@@ -73,6 +78,10 @@ final class PopupController: NSObject, NSWindowDelegate {
     private var previousApp: NSRunningApplication?
     private let onAction: (ClipAction, Int64, NSRunningApplication?) -> Void
     private let onSequence: ([Int64], NSRunningApplication?) -> Void
+    private var previewObserver: AnyCancellable?
+    /// Panel width before the preview pane widened it.
+    private var collapsedWidth: CGFloat?
+    private static let previewWidth: CGFloat = 900
 
     init(store: Store,
          onAction: @escaping (ClipAction, Int64, NSRunningApplication?) -> Void,
@@ -96,6 +105,32 @@ final class PopupController: NSObject, NSWindowDelegate {
         hosting.wantsLayer = true
         hosting.layer?.backgroundColor = .clear
         panel.contentView = makeGlassContainer(hosting: hosting)
+        previewObserver = viewModel.$preview
+            .map { $0 != nil }
+            .removeDuplicates()
+            .dropFirst()
+            .sink { [weak self] open in self?.resizeForPreview(open) }
+    }
+
+    /// Widens the panel while the preview pane is shown, keeping it centered.
+    private func resizeForPreview(_ open: Bool) {
+        var frame = panel.frame
+        if open {
+            guard collapsedWidth == nil, frame.width < Self.previewWidth else { return }
+            collapsedWidth = frame.width
+            frame.size.width = Self.previewWidth
+        } else {
+            guard let width = collapsedWidth else { return }
+            collapsedWidth = nil
+            frame.size.width = width
+        }
+        frame.origin.x = panel.frame.midX - frame.width / 2
+        if let visible = panel.screen?.visibleFrame {
+            frame.size.width = min(frame.width, visible.width)
+            frame.origin.x = min(max(frame.minX, visible.minX), visible.maxX - frame.width)
+        }
+        panel.setFrame(frame, display: true, animate: panel.isVisible)
+        panel.invalidateShadow()
     }
 
     var isVisible: Bool { panel.isVisible }
