@@ -1,48 +1,41 @@
 import AppKit
 
-/// One pasteboard item of a group drag = one stored record's one `item` group. A multi-file
-/// record (several `item`s) therefore produces several items. It carries the record's
-/// representations, so dropping the group lands as the same content a paste would: image
-/// UTIs, file URLs, or plain text.
-final class ClipDragItem: NSDraggingItem {
-    private let reps: [(NSPasteboard.PasteboardType, Data)]
-    private let thumbnail: NSImage?
+/// Creates one drag item for one stored pasteboard item.
+enum ClipDragItem {
+    static func make(
+        reps: [(NSPasteboard.PasteboardType, Data)],
+        thumbnail: NSImage?,
+        at point: NSPoint
+    ) -> NSDraggingItem {
+        let writer = NSPasteboardItem()
+        for (type, data) in reps {
+            writer.setData(data, forType: type)
+        }
 
-    init(reps: [(NSPasteboard.PasteboardType, Data)], thumbnail: NSImage?) {
-        self.reps = reps
-        self.thumbnail = thumbnail
-        super.init(pasteboard: nil)
-    }
-
-    override var availableTypes: [NSPasteboard.PasteboardType] {
-        reps.map(\.0)
-    }
-
-    override func writingOptions(forType type: NSPasteboard.PasteboardType)
-        -> [NSPasteboard.WritingOption: NSPasteboard.WritingOptions] {
-        [:]
-    }
-
-    override func writeItems(to sender: NSPasteboardWriting,
-                             options: NSPasteboard.WritingOptions,
-                             forType type: NSPasteboard.PasteboardType) -> Bool {
-        guard let data = reps.first(where: { $0 == type })?.1 else { return false }
-        return sender.writeData(data, forType: type)
-    }
-
-    /// A small image so the dragged stack looks like what it carries; `nil` for text.
-    override func draggingImage(offset: NSPoint) -> (NSImage, NSPoint)? {
-        guard let thumbnail else { return nil }
-        return (thumbnail, NSPoint(x: thumbnail.size.width / 2, y: 0))
+        let item = NSDraggingItem(pasteboardWriter: writer)
+        if let thumbnail {
+            let frame = NSRect(
+                x: point.x - thumbnail.size.width / 2,
+                y: point.y - thumbnail.size.height / 2,
+                width: thumbnail.size.width,
+                height: thumbnail.size.height
+            )
+            item.setDraggingFrame(frame, contents: thumbnail)
+        }
+        return item
     }
 }
 
-/// The source we hand to `beginDraggingSession`; it only needs `draggingEnded` so the caller
-/// can clear its in-drag guard and close the popup when the group is dropped or cancelled.
+/// The source clears the in-drag guard and closes the popup when the drag ends.
 final class DragSource: NSObject, NSDraggingSource {
     var onEnded: (() -> Void)?
 
-    func draggingEnded(_ session: NSDraggingSession) {
+    func draggingSession(_ session: NSDraggingSession, sourceOperationMaskFor context: NSDraggingContext)
+        -> NSDragOperation {
+        .copy
+    }
+
+    func draggingSession(_ session: NSDraggingSession, endedAt screenPoint: NSPoint, operation: NSDragOperation) {
         onEnded?()
     }
 }

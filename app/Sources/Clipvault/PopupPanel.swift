@@ -90,9 +90,7 @@ final class PopupController: NSObject, NSWindowDelegate {
     private var previewObserver: AnyCancellable?
     /// Popup origin before it moved aside for the preview window.
     private var originBeforePreview: NSPoint?
-    // Group drag: a hidden view is the `NSDraggingSource` we start the session on; the monitor
-    // watches for a drag gesture inside the list and hands off to `beginDraggingSession`.
-    private let dragHost = NSView(frame: .zero)
+    // The monitor watches for a drag gesture inside the list and hands off to AppKit.
     private let dragSource = DragSource()
     private var mouseMonitor: Any?
     private var isDragging = false
@@ -121,10 +119,6 @@ final class PopupController: NSObject, NSWindowDelegate {
         hosting.wantsLayer = true
         hosting.layer?.backgroundColor = .clear
         panel.contentView = makeGlassContainer(hosting: hosting)
-        if let content = panel.contentView {
-            dragHost.frame = .zero
-            content.addSubview(dragHost)
-        }
         // When the group is dropped or cancelled, clear the guard and close the popup.
         dragSource.onEnded = { [weak self] in
             DispatchQueue.main.async {
@@ -264,16 +258,14 @@ final class PopupController: NSObject, NSWindowDelegate {
     }
 
     private func startDrag(with event: NSEvent) {
-        let items = viewModel.makeDragItems()
+        guard let contentView = panel.contentView else { return }
+        let point = contentView.convert(event.locationInWindow, from: nil)
+        let items = viewModel.makeDragItems(at: point)
         guard !items.isEmpty else { return }
         isDragging = true
-        if let session = dragHost.beginDraggingSession(with: items, event: event, source: dragSource) {
-            session.beginDrag(with: items)
-            // One drag per gesture; stop watching so a second move can't re-start it.
-            removeDragMonitor()
-        } else {
-            isDragging = false
-        }
+        contentView.beginDraggingSession(with: items, event: event, source: dragSource)
+        // One drag per gesture; stop watching so a second move can't re-start it.
+        removeDragMonitor()
     }
 
     private func handle(_ event: NSEvent) -> Bool {

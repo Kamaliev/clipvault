@@ -133,8 +133,8 @@ final class HistoryViewModel: ObservableObject {
 
     /// One `ClipDragItem` per pasteboard item of every selected record, so a drop lands as N
     /// separate items (4 screenshots → 4 attachments). Caps the work at a bounded number of items.
-    func makeDragItems() -> [NSDraggingItem] {
-        var out: [ClipDragItem] = []
+    func makeDragItems(at point: NSPoint) -> [NSDraggingItem] {
+        var out: [NSDraggingItem] = []
         for summary in items where selected.contains(summary.id) {
             guard let reps = try? store.get(id: summary.id) else { continue }
             // Group reps by their `item` like Paster.write: several `item`s are several drops.
@@ -147,7 +147,7 @@ final class HistoryViewModel: ObservableObject {
             for key in order {
                 let types = (byItem[key] ?? []).map { (NSPasteboard.PasteboardType($0.uti), $0.data) }
                 guard !types.isEmpty else { continue }
-                out.append(ClipDragItem(reps: types, thumbnail: dragThumbnail(for: summary)))
+                out.append(ClipDragItem.make(reps: types, thumbnail: dragThumbnail(for: summary), at: point))
                 if out.count >= 100 { return out }
             }
         }
