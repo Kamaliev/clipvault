@@ -14,9 +14,12 @@ struct ClipPreview: Equatable {
 @MainActor
 final class HistoryViewModel: ObservableObject {
     @Published var query = "" {
-        didSet { if query != oldValue { selection = 0; reload() } }
+        didSet { if query != oldValue { selected = []; selectionAnchor = nil; selection = 0; reload() } }
     }
     @Published private(set) var items: [ClipSummary] = []
+    /// The group of records the user can drag together; `selection` is the primary/cursor row.
+    @Published private(set) var selected = Set<Int64>()
+    private var selectionAnchor: Int64?
     @Published var selection = 0 {
         didSet {
             guard selection != oldValue else { return }
@@ -46,6 +49,8 @@ final class HistoryViewModel: ObservableObject {
         preview = nil
         revealedID = nil
         query = ""
+        selected = []
+        selectionAnchor = nil
         selection = 0
         reload()
         focusToken = UUID()
@@ -60,6 +65,10 @@ final class HistoryViewModel: ObservableObject {
             items = []
         }
         selection = min(selection, max(items.count - 1, 0))
+        // Drop group members that are no longer listed (expired or filtered out).
+        let live = Set(items.map(\.id))
+        selected = selected.intersection(live)
+        if let anchor = selectionAnchor, !live.contains(anchor) { selectionAnchor = nil }
         if preview != nil { loadPreview() }
     }
 
@@ -83,6 +92,77 @@ final class HistoryViewModel: ObservableObject {
         var ids = [items[index].id]
         for item in items[..<index].reversed() where !item.pinned { ids.append(item.id) }
         onSequence?(ids)
+    }
+
+    /// Builds the group, reading ⌘/⇧ like Finder: a plain click collapses to the clicked row,
+    /// ⌘ toggles one record, ⇧ extends the range from the last clicked row.
+    func click(index: Int) {
+        guard items.indices.contains(index) else { return }
+        let mods = NSEvent.modifierFlags.intersection([.command, .shift])
+        let id = items[index].id
+        if mods.contains(.shift), let anchor = selectionAnchor,
+           let from = items.firstIndex(where: { $0.id == anchor }) {
+            let range = min(from, index) ... max(from, index)
+            selected = Set(items[range].map(\.id))
+        } else if mods.contains(.command) {
+            if selected.contains(id) { selected.remove(id) } else { selected.insert(id) }
+        } else {
+            selected = [id]
+        }
+        selectionAnchor = id
+        selection = index
+    }
+
+    func selectAll() {
+        selected = Set(items.map(\.id))
+        selectionAnchor = items.first?.id
+    }
+
+    /// Esc collapses a group to the cursor row; returns false when there is nothing to collapse.
+    func collapseSelection() -> Bool {
+        guard selected.count > 1, items.indices.contains(selection) else { return false }
+        selected = [items[selection].id]
+        selectionAnchor = items[selection].id
+        return true
+    }
+
+    /// The group in on-screen (list) order, so a drop lands in the same order it appears.
+    var selectedIds: [Int64] {
+        items.filter { selected.contains($0.id) }.map(\.id)
+    }
+
+    /// One `ClipDragItem` per pasteboard item of every selected record, so a drop lands as N
+    /// separate items (4 screenshots → 4 attachments). Caps the work at a bounded number of items.
+    func makeDragItems() -> [NSDraggingItem] {
+        var out: [ClipDragItem] = []
+        for summary in items where selected.contains(summary.id) {
+            guard let reps = try? store.get(id: summary.id) else { continue }
+            // Group reps by their `item` like Paster.write: several `item`s are several drops.
+            var order: [UInt32] = []
+            var byItem: [UInt32: [ClipRep]] = [:]
+            for rep in reps {
+                if byItem[rep.item] == nil { order.append(rep.item) }
+                byItem[rep.item, default: []].append(rep)
+            }
+            for key in order {
+                let types = (byItem[key] ?? []).map { (NSPasteboard.PasteboardType($0.uti), $0.data) }
+                guard !types.isEmpty else { continue }
+                out.append(ClipDragItem(reps: types, thumbnail: dragThumbnail(for: summary)))
+                if out.count >= 100 { return out }
+            }
+        }
+        return out
+    }
+
+    private func dragThumbnail(for summary: ClipSummary) -> NSImage? {
+        if summary.kind == .image { return thumbnail(for: summary) }
+        let symbol: String
+        switch summary.kind {
+        case .files: symbol = "folder"
+        case .text: symbol = "doc.plaintext"
+        default: symbol = "doc.richtext"
+        }
+        return NSImage(systemSymbolName: symbol, accessibilityDescription: nil)
     }
 
     func togglePin(index: Int? = nil) {
@@ -229,13 +309,13 @@ struct HistoryView: View {
             Divider().opacity(0.6)
             HStack {
                 Text(model.preview == nil
-                     ? "⏎ paste · ⇧⏎ plain · ⌘⏎ copy · ⌥⏎ sequence · ⌘P pin · space preview"
+                     ? "⏎ paste · ⇧⏎ plain · ⌘⏎ copy · ⌥⏎ sequence · ⌘P pin · space preview · ⇧ select · drag → app"
                      : model.preview?.masked == true
                      ? "↑↓ browse · ⌘R reveal secret · ⌘+ ⌘− ⌘0 zoom · space/esc close"
                      : "↑↓ browse · ⌘+ ⌘− ⌘0 zoom · space/esc close")
                     .lineLimit(1)
                     .truncationMode(.tail)
-                    .help("⏎ paste · ⇧⏎ paste as plain text · ⌘⏎ copy only · ⌥⏎ paste sequentially (then ⌥⇧⌘V) · ⌘P pin · space or ⌘Y preview (⌘+/⌘−/⌘0 zoom, ⌘R reveal a masked secret) · ⌘⌫ delete · ⌘1–9 paste n-th · ⌘, settings")
+                    .help("⏎ paste · ⇧⏎ paste as plain text · ⌘⏎ copy only · ⌥⏎ paste sequentially (then ⌥⇧⌘V) · ⌘P pin · space or ⌘Y preview (⌘+/⌘−/⌘0 zoom, ⌘R reveal a masked secret) · ⌘⌫ delete · ⌘1–9 paste n-th · ⌘, settings · ⇧ select a group, ⌘ add/remove, ⌘A select all, then drag it into any app")
                 Spacer(minLength: 8)
                 if !model.accessibilityGranted {
                     Text("Copy only")
@@ -262,11 +342,12 @@ struct HistoryView: View {
                 LazyVStack(spacing: 2) {
                     ForEach(Array(model.items.enumerated()), id: \.element.id) { index, item in
                         HistoryRow(item: item, index: index, selected: index == model.selection,
+                                   isSelected: model.selected.contains(item.id),
                                    thumbnail: model.thumbnail(for: item))
                             .id(item.id)
                             .contentShape(Rectangle())
                             .onTapGesture(count: 2) { model.choose(index: index) }
-                            .onTapGesture { model.selection = index }
+                            .onTapGesture { model.click(index: index) }
                             .contextMenu { menu(for: item, index: index) }
                     }
                 }
@@ -318,7 +399,10 @@ private struct GlassScrim: ViewModifier {
 struct HistoryRow: View {
     let item: ClipSummary
     let index: Int
+    /// The keyboard cursor (primary highlight).
     let selected: Bool
+    /// In the drag group but not the cursor (lighter accent highlight).
+    let isSelected: Bool
     let thumbnail: NSImage?
 
     var body: some View {
@@ -344,8 +428,22 @@ struct HistoryRow: View {
         .padding(.vertical, 5)
         .background(
             RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(selected ? Color.primary.opacity(0.1) : .clear)
+                .fill(rowFill)
+                .overlay(
+                    isSelected
+                        ? RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .strokeBorder(Color.accentColor.opacity(0.5), lineWidth: 1)
+                        : nil
+                )
         )
+    }
+
+    /// The cursor row is highlighted most strongly; other group members get an accent fill with
+    /// a border so the whole group reads as one unit.
+    private var rowFill: Color {
+        if selected { return Color.primary.opacity(0.1) }
+        if isSelected { return Color.accentColor.opacity(0.10) }
+        return .clear
     }
 
     @ViewBuilder

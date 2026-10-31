@@ -90,6 +90,14 @@ final class PopupController: NSObject, NSWindowDelegate {
     private var previewObserver: AnyCancellable?
     /// Popup origin before it moved aside for the preview window.
     private var originBeforePreview: NSPoint?
+    // Group drag: a hidden view is the `NSDraggingSource` we start the session on; the monitor
+    // watches for a drag gesture inside the list and hands off to `beginDraggingSession`.
+    private let dragHost = NSView(frame: .zero)
+    private let dragSource = DragSource()
+    private var mouseMonitor: Any?
+    private var isDragging = false
+    private var dragArmed = false
+    private var mouseDownPoint: NSPoint?
 
     init(store: Store,
          onAction: @escaping (ClipAction, Int64, NSRunningApplication?) -> Void,
@@ -113,6 +121,18 @@ final class PopupController: NSObject, NSWindowDelegate {
         hosting.wantsLayer = true
         hosting.layer?.backgroundColor = .clear
         panel.contentView = makeGlassContainer(hosting: hosting)
+        if let content = panel.contentView {
+            dragHost.frame = .zero
+            content.addSubview(dragHost)
+        }
+        // When the group is dropped or cancelled, clear the guard and close the popup.
+        dragSource.onEnded = { [weak self] in
+            DispatchQueue.main.async {
+                guard let self else { return }
+                self.isDragging = false
+                self.close()
+            }
+        }
         previewObserver = viewModel.$preview
             .dropFirst()
             .sink { [weak self] preview in self?.updatePreview(preview) }
@@ -147,10 +167,12 @@ final class PopupController: NSObject, NSWindowDelegate {
         panel.makeKeyAndOrderFront(nil)
         onVisibilityChange?(true)
         installKeyMonitor()
+        installDragMonitor()
     }
 
     func close() {
         removeKeyMonitor()
+        removeDragMonitor()
         previewer.hide()
         originBeforePreview = nil
         _ = viewModel.closePreview()
@@ -168,6 +190,8 @@ final class PopupController: NSObject, NSWindowDelegate {
     }
 
     func windowDidResignKey(_ notification: Notification) {
+        // Don't close mid-drag: handing off to the target app can drop focus away from the popup.
+        guard !isDragging else { return }
         close()
     }
 
@@ -194,6 +218,64 @@ final class PopupController: NSObject, NSWindowDelegate {
         keyMonitor = nil
     }
 
+    /// Watches for a drag gesture inside the list body and starts a multi-item AppKit drag of
+    /// the whole selection. A local monitor passes the events through, so scrolling and taps
+    /// still work; only a button-held move past a threshold becomes a drag.
+    private func installDragMonitor() {
+        removeDragMonitor()
+        mouseMonitor = NSEvent.addLocalMonitorForEvents(
+            matching: [.leftMouseDown, .leftMouseDragged, .leftMouseUp]) { [weak self] event in
+            guard let self, event.window === self.panel else { return event }
+            self.handleDrag(event)
+            return event
+        }
+    }
+
+    private func removeDragMonitor() {
+        if let mouseMonitor { NSEvent.removeMonitor(mouseMonitor) }
+        mouseMonitor = nil
+        dragArmed = false
+        mouseDownPoint = nil
+    }
+
+    private func handleDrag(_ event: NSEvent) {
+        switch event.type {
+        case .leftMouseDown:
+            mouseDownPoint = event.locationInWindow
+            // A drag only starts from the list body, and only when a group is selected.
+            dragArmed = !viewModel.selected.isEmpty && inList(event.locationInWindow)
+        case .leftMouseDragged:
+            guard dragArmed, let start = mouseDownPoint, !isDragging else { return }
+            let dx = event.locationInWindow.x - start.x
+            let dy = event.locationInWindow.y - start.y
+            guard hypot(dx, dy) > 5 else { return }
+            startDrag(with: event)
+        case .leftMouseUp:
+            dragArmed = false
+        default:
+            break
+        }
+    }
+
+    /// The search field (top) and footer (bottom) are not drag starts; only the list body is.
+    private func inList(_ p: NSPoint) -> Bool {
+        let h = panel.frame.height
+        return p.y > 36 && p.y < h - 64
+    }
+
+    private func startDrag(with event: NSEvent) {
+        let items = viewModel.makeDragItems()
+        guard !items.isEmpty else { return }
+        isDragging = true
+        if let session = dragHost.beginDraggingSession(with: items, event: event, source: dragSource) {
+            session.beginDrag(with: items)
+            // One drag per gesture; stop watching so a second move can't re-start it.
+            removeDragMonitor()
+        } else {
+            isDragging = false
+        }
+    }
+
     private func handle(_ event: NSEvent) -> Bool {
         let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
         let mods = flags.intersection([.command, .shift, .option, .control])
@@ -210,10 +292,13 @@ final class PopupController: NSObject, NSWindowDelegate {
             }
             return true
         case 53: // esc
+            // Esc first collapses a group to the cursor row, then the preview, then the panel.
+            if viewModel.collapseSelection() { return true }
             if !viewModel.closePreview() { close() }
             return true
         case 51 where mods == .command: viewModel.delete(); return true // ⌘⌫
         case 35 where mods == .command: viewModel.togglePin(); return true // ⌘P
+        case 0 where mods == .command: viewModel.selectAll(); return true // ⌘A
         case 43 where mods == .command: // ⌘,
             close()
             onOpenSettings?()
