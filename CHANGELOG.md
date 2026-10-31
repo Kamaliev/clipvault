@@ -6,6 +6,10 @@ the project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- Files copied in Finder showed as `/.file/id=…` instead of their path: file reference URLs are now stored as path URLs.
+
 ## [0.3.0] - 2026-10-30
 
 ### Added

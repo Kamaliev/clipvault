@@ -98,7 +98,8 @@ final class PasteboardMonitor {
         for (index, item) in items.enumerated() {
             let types = item.types.map(\.rawValue)
             for type in types where Self.wanted(type, in: types, hasFiles: hasFiles) {
-                guard let data = item.data(forType: .init(type)), !data.isEmpty else { continue }
+                guard var data = item.data(forType: .init(type)), !data.isEmpty else { continue }
+                if type == Self.fileURLType { data = Self.resolveFileReference(data) }
                 total += data.count
                 if total > maxBytes { return }
                 reps.append(ClipRep(item: UInt32(index), uti: type, data: data))
@@ -122,6 +123,16 @@ final class PasteboardMonitor {
                 NSLog("clipvault: failed to store clip: \(error)")
             }
         }
+    }
+
+    /// Finder copies file reference URLs (`file:///.file/id=…`); store the path URL instead so
+    /// previews, search and paste show the real path.
+    static func resolveFileReference(_ data: Data) -> Data {
+        guard let s = String(data: data, encoding: .utf8),
+              // NSURL, not URL: bridging to URL drops the file-reference flag.
+              let url = NSURL(string: s.trimmingCharacters(in: .whitespacesAndNewlines.union(.init(charactersIn: "\0")))),
+              url.isFileReferenceURL(), let path = url.filePathURL else { return data }
+        return Data(path.absoluteString.utf8)
     }
 
     private static func wanted(_ type: String, in types: [String], hasFiles: Bool) -> Bool {
