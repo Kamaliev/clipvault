@@ -6,6 +6,12 @@ the project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-10-31
+
+### Removed
+
+- Multi-record selection and group drag from the withdrawn 0.4.0 release: the code is back to 0.3.1 behaviour.
+
 ## [0.3.1] - 2026-10-31
 
 ### Fixed
@@ -83,7 +89,8 @@ the project uses [Semantic Versioning](https://semver.org/).
 - Password-manager concealed/transient content is ignored.
 - Homebrew cask distribution via `Kamaliev/tap`.
 
-[Unreleased]: https://github.com/Kamaliev/clipvault/compare/v0.3.1...HEAD
+[Unreleased]: https://github.com/Kamaliev/clipvault/compare/v0.4.1...HEAD
+[0.4.1]: https://github.com/Kamaliev/clipvault/compare/v0.3.1...v0.4.1
 [0.3.1]: https://github.com/Kamaliev/clipvault/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/Kamaliev/clipvault/compare/v0.2.2...v0.3.0
 [0.2.2]: https://github.com/Kamaliev/clipvault/compare/v0.2.1...v0.2.2
