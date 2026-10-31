@@ -49,6 +49,7 @@ remove it with − and press <kbd>⏎</kbd> again. Versions up to 0.2.1 were sig
   (on-device Vision OCR, can be turned off in Settings).
 - Paste as plain text, copy without pasting, and paste a run of items one after another.
 - Pinned items stay on top and never expire.
+- Select multiple history records with ⇧-click, ⌘-click, or ⌘A, then drag them into another app as separate items.
 - Quick Look–style preview (Space, like Finder) with zoom for images and text; links and colors (`#rrggbb`, `rgb()`) are recognized in the list.
 - Translucent panel: Liquid Glass on macOS 26, vibrancy on macOS 14–15.
 - Per-record encryption (XChaCha20-Poly1305); master key in the Keychain.
@@ -72,11 +73,12 @@ remove it with − and press <kbd>⏎</kbd> again. Versions up to 0.2.1 were sig
 | <kbd>⌥⏎</kbd> | Paste sequentially: pastes the record, then each <kbd>⌥⇧⌘V</kbd> pastes the next newer one |
 | <kbd>⌘1</kbd> … <kbd>⌘9</kbd> | Paste the n-th record |
 | <kbd>⌘P</kbd> | Pin or unpin |
+| <kbd>⇧</kbd>-click / <kbd>⌘</kbd>-click / <kbd>⌘A</kbd> | Select a range, add or remove a record, or select all; drag the selection into another app |
 | <kbd>Space</kbd> / <kbd>⌘Y</kbd> | Quick Look–style preview (Space types a space while searching) |
 | <kbd>⌘+</kbd> <kbd>⌘−</kbd> <kbd>⌘0</kbd> | Zoom the preview; ⌘0 or double-click toggles fit / actual size |
 | <kbd>⌘R</kbd> | Reveal or hide a masked secret in the preview |
 | <kbd>⌘⌫</kbd> | Delete record |
-| <kbd>Esc</kbd> | Close preview, then the panel |
+| <kbd>Esc</kbd> | Collapse a multi-record selection, close preview, then the panel |
 | <kbd>⌘,</kbd> | Settings |
 
 Right-click a record for the same actions and for **Mark as Secret** / **Not a Secret**.
